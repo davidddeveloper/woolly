@@ -1,0 +1,114 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Nunito Variable', ui-rounded, system-ui, sans-serif;
+
+  --color-cream: #fff8ee;
+  --color-wool: #fff1dc;
+  --color-ink: #26232e;
+  --color-line: #f0e4d2;
+
+  --color-meadow: #34c17b;
+  --color-meadow-deep: #1f9a5c;
+  --color-meadow-soft: #def6e8;
+
+  --color-income: #f5a524;
+  --color-expense: #ff6b5e;
+  --color-saving: #3ba7ff;
+  --color-investment: #8b5cf6;
+  --color-buffer: #ff5fa2;
+  --color-flame: #ff8a1f;
+
+  --shadow-card: 0 1px 0 rgba(120, 84, 30, 0.04), 0 8px 24px -12px rgba(120, 84, 30, 0.22);
+  --shadow-float: 0 18px 40px -16px rgba(120, 84, 30, 0.4);
+}
+
+:root {
+  color-scheme: light;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  font-size: 16px; /* keeps iOS from zooming on focus */
+}
+
+button {
+  cursor: pointer;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+/* Duolingo-style chunky 3D button. Set --btn and --btn-deep inline. */
+.chunky {
+  background: var(--btn, var(--color-meadow));
+  box-shadow:
+    0 4px 0 var(--btn-deep, var(--color-meadow-deep)),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition:
+    transform 80ms ease,
+    box-shadow 80ms ease,
+    filter 120ms ease;
+}
+.chunky:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow:
+    0 0 0 var(--btn-deep, var(--color-meadow-deep)),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.chunky:disabled {
+  filter: grayscale(1) opacity(0.45);
+}
+
+.chunky-soft {
+  background: #fff;
+  box-shadow:
+    0 3px 0 var(--color-line),
+    0 0 0 2px var(--color-line) inset;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+.chunky-soft:active {
+  transform: translateY(3px);
+  box-shadow:
+    0 0 0 var(--color-line),
+    0 0 0 2px var(--color-line) inset;
+}
+
+.pt-safe {
+  padding-top: calc(var(--safe-top) + 12px);
+}
+.pb-nav {
+  padding-bottom: calc(var(--safe-bottom) + 112px);
+}
