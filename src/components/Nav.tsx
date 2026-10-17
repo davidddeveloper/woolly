@@ -20,13 +20,15 @@ export function BottomNav({ tab, onTab, onAdd, pulse }: { tab: Tab; onTab: (t: T
   const item = ({ id, label, Icon }: (typeof TABS)[number]) => {
     const on = tab === id
     return (
-      <button key={id} onClick={() => onTab(id)} className="relative flex h-14 flex-1 flex-col items-center justify-center gap-0.5" aria-label={label}>
-        {on && <motion.span layoutId="nav-pill" className="absolute inset-x-2 inset-y-1 rounded-2xl bg-meadow-soft" transition={spring} />}
-        <motion.span className="relative" animate={{ y: on ? -1 : 0, scale: on ? 1.08 : 1 }} transition={spring}>
-          <Icon size={24} strokeWidth={on ? 2.75 : 2.25} color={on ? '#1F9A5C' : 'rgba(38,35,46,.45)'} />
-        </motion.span>
-        <span className="relative text-[12px] font-extrabold" style={{ color: on ? '#1F9A5C' : 'rgba(38,35,46,.45)' }}>
-          {label}
+      <button key={id} onClick={() => onTab(id)} className="flex h-16 min-w-0 flex-1 items-center justify-center" aria-label={label}>
+        <span className="relative flex flex-col items-center gap-0.5 px-3.5 py-1.5">
+          {on && <motion.span layoutId="nav-pill" className="absolute inset-0 rounded-2xl bg-meadow-soft" transition={spring} />}
+          <motion.span className="relative" animate={{ y: on ? -1 : 0, scale: on ? 1.08 : 1 }} transition={spring}>
+            <Icon size={24} strokeWidth={on ? 2.75 : 2.25} color={on ? '#1F9A5C' : 'rgba(38,35,46,.45)'} />
+          </motion.span>
+          <span className="relative text-[12px] font-extrabold whitespace-nowrap" style={{ color: on ? '#1F9A5C' : 'rgba(38,35,46,.45)' }}>
+            {label}
+          </span>
         </span>
       </button>
     )
