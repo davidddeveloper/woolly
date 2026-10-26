@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react'
 import type { Entry } from '../db/repo'
 import { BUCKETS, categoryEmoji, type GoalCategory } from '../lib/buckets'
 import { money } from '../lib/format'
+import { noteSummary } from '../lib/notes'
 import { spring } from './ui'
 
 export type Tab = 'home' | 'activity' | 'insights' | 'barn'
@@ -52,7 +53,14 @@ export function BottomNav({ tab, onTab, onAdd, pulse }: { tab: Tab; onTab: (t: T
   }
   return (
     <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto max-w-[480px] px-3" style={{ paddingBottom: 'calc(var(--safe-bottom) + 10px)' }}>
-      <div className="pointer-events-auto relative flex items-center rounded-[26px] bg-white/92 px-1 shadow-[0_14px_34px_-14px_rgba(80,52,14,.45),0_0_0_1px_rgba(240,228,210,.95)] backdrop-blur-xl">
+      <div className="pointer-events-auto relative flex items-center px-1">
+        {/* The frosted glass is its own empty layer. WebKit can paint animated children of a
+            backdrop-filter element black (the + button pokes out above the bar), so nothing
+            that moves may live inside it. */}
+        <div
+          aria-hidden
+          className="absolute inset-0 rounded-[26px] bg-white/92 shadow-[0_14px_34px_-14px_rgba(80,52,14,.45),0_0_0_1px_rgba(240,228,210,.95)] backdrop-blur-xl"
+        />
         {left.map(item)}
         <div className="relative w-[78px] shrink-0 self-stretch">
           {/* the white collar makes the button look set into the bar */}
@@ -67,7 +75,7 @@ export function BottomNav({ tab, onTab, onAdd, pulse }: { tab: Tab; onTab: (t: T
             <motion.button
               aria-label="Log money"
               onClick={onAdd}
-              whileTap={{ scale: 0.9, rotate: 90 }}
+              whileTap={{ scale: 0.9 }}
               className="chunky relative grid h-[60px] w-[60px] place-items-center rounded-full text-white"
               style={{ '--btn': 'linear-gradient(180deg, #4AD891 0%, #2FB572 100%)' } as CSSProperties}
             >
@@ -99,6 +107,7 @@ export function EntryRow({
 }) {
   const b = BUCKETS[e.kind]
   const sign = e.kind === 'income' ? '+' : e.kind === 'expense' ? '−' : ''
+  const note = noteSummary(e.note)
   return (
     <motion.button
       layout
@@ -114,9 +123,9 @@ export function EntryRow({
         {categoryEmoji(e.kind, e.category, family, goals)}
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-[15px] font-extrabold">{e.note || e.category}</span>
+        <span className="truncate text-[15px] font-extrabold">{note.title || e.category}</span>
         <span className="truncate text-[13px] font-bold text-ink/50">
-          {e.note ? `${e.category} · ` : ''}
+          {note.detail ? `${note.detail} · ` : note.title ? `${e.category} · ` : ''}
           <span style={{ color: b.deep }}>{b.label}</span>
         </span>
       </span>

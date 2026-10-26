@@ -98,7 +98,7 @@ export function Sheet({ open, onClose, children, tall }: { open: boolean; onClos
       {open && (
         <>
           <motion.div
-            className="fixed inset-0 z-40 bg-ink/40 backdrop-blur-[2px]"
+            className="fixed inset-0 z-40 bg-ink/40"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
