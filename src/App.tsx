@@ -1,11 +1,13 @@
 import { motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { AddSheet } from './components/AddSheet'
+import { BudgetSheet, ReviewSheet } from './components/Budgets'
 import { Celebration } from './components/Celebration'
 import { BottomNav, type Tab } from './components/Nav'
 import { Penny } from './components/Penny'
 import { useToast } from './components/ui'
 import type { Entry } from './db/repo'
+import type { Budget } from './lib/budgets'
 import { Activity } from './screens/Activity'
 import { Barn } from './screens/Barn'
 import { Home } from './screens/Home'
@@ -16,11 +18,13 @@ import { useStore } from './store'
 const ORDER: Tab[] = ['home', 'activity', 'insights', 'barn']
 
 export default function App() {
-  const { ready, settings, streak, restore } = useStore()
+  const { ready, settings, streak, restore, reviews, celebration } = useStore()
   const [tab, setTab] = useState<Tab>('home')
   const [dir, setDir] = useState(0)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Entry | null>(null)
+  const [budget, setBudget] = useState<{ open: boolean; value: Budget | null }>({ open: false, value: null })
+  const [reviewHidden, setReviewHidden] = useState(false)
   const toast = useToast()
   const scroller = useRef<HTMLDivElement>(null)
 
@@ -53,7 +57,7 @@ export default function App() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ type: 'spring', stiffness: 420, damping: 40 }}
         >
-          {tab === 'home' && <Home onAdd={() => setAdding(true)} onEdit={openEdit} onSeeAll={() => go('activity')} onBarn={() => go('barn')} />}
+          {tab === 'home' && <Home onAdd={() => setAdding(true)} onEdit={openEdit} onSeeAll={() => go('activity')} onBarn={() => go('barn')} onBudget={(b) => setBudget({ open: true, value: b })} />}
           {tab === 'activity' && <Activity onEdit={openEdit} onAdd={() => setAdding(true)} />}
           {tab === 'insights' && <Insights />}
           {tab === 'barn' && <Barn toast={(t) => toast.show(t)} />}
@@ -68,6 +72,13 @@ export default function App() {
           setTimeout(() => setEditing(null), 300)
         }}
         onDeleted={onDeleted}
+      />
+      <BudgetSheet open={budget.open} budget={budget.value} onClose={() => setBudget((b) => ({ ...b, open: false }))} />
+      {/* Wrap up ended budget periods on the Meadow, one at a time, when nothing else is on screen. */}
+      <ReviewSheet
+        open={tab === 'home' && !reviewHidden && !adding && !budget.open && !celebration}
+        review={reviews[0]}
+        onClose={() => setReviewHidden(true)}
       />
       <Celebration />
       {toast.node}

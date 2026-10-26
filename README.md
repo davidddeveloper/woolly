@@ -29,7 +29,9 @@ Schema: `src/db/sqlite.ts` (append to `MIGRATIONS` to change it).
 
 - `src/lib/buckets.ts`: the five buckets, colours, categories
 - `src/lib/game.ts`: streaks, XP/levels, badges, wardrobe, Penny's moods and lines
-- `src/components/Penny.tsx`: mascot (blink, idle, jump, mood effects, outfits)
+- `src/lib/budgets.ts`: weekly/monthly budgets: periods, pace, alerts at 80%/100%, end-of-period reviews
+- `src/components/Budgets.tsx`: Meadow budgets card, budget editor, period wrap-up (save / treat / roll over)
+- `src/components/Penny.tsx`: mascot (blink, idle, jump, mood effects) · `Outfits.tsx`: the wardrobe
 - `src/components/AddSheet.tsx`: logging flow · `Celebration.tsx`: reward moments
 - `src/screens/*`: Meadow (home), Activity, Insights, Barn, Onboarding
 - `scripts/make-icons.mjs`: regenerates icons/mascot from `assets-src/`

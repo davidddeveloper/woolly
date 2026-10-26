@@ -22,6 +22,26 @@ const MIGRATIONS: string[] = [
   CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   CREATE TABLE badges (id TEXT PRIMARY KEY, unlocked_at TEXT NOT NULL);
   `,
+  `
+  CREATE TABLE budgets (
+    id          TEXT PRIMARY KEY,
+    kind        TEXT NOT NULL CHECK (kind IN ('expense','buffer')),
+    category    TEXT NOT NULL DEFAULT '',               -- '' = the whole bucket
+    period      TEXT NOT NULL CHECK (period IN ('week','month')),
+    amount      INTEGER NOT NULL CHECK (amount > 0),    -- minor units per period
+    created_at  TEXT NOT NULL
+  );
+  CREATE TABLE budget_closes (
+    budget_id     TEXT NOT NULL REFERENCES budgets (id) ON DELETE CASCADE,
+    period_start  TEXT NOT NULL,                        -- YYYY-MM-DD
+    limit_amount  INTEGER NOT NULL,
+    spent         INTEGER NOT NULL,
+    outcome       TEXT NOT NULL CHECK (outcome IN ('saved','treat','rollover','over','dismissed')),
+    amount        INTEGER NOT NULL DEFAULT 0,           -- leftover saved / rolled over
+    created_at    TEXT NOT NULL,
+    PRIMARY KEY (budget_id, period_start)
+  );
+  `,
 ]
 
 let db: Database | null = null
@@ -117,3 +137,5 @@ export async function wipe() {
   migrate(db)
   await persist()
 }
+
+if (import.meta.env.DEV) (window as unknown as { __woollySql: unknown }).__woollySql = { all, run }

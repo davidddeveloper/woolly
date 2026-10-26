@@ -2,6 +2,7 @@ import { all, run, runMany } from './sqlite'
 import type { Kind } from '../lib/buckets'
 import { DEFAULT_FAMILY } from '../lib/buckets'
 import { dayKey, uid } from '../lib/format'
+import type { Budget, BudgetClose, BudgetInput } from '../lib/budgets'
 
 export interface Entry {
   id: string
@@ -94,6 +95,33 @@ export async function restoreEntry(e: Entry) {
 
 export async function checkInToday() {
   await run('INSERT OR IGNORE INTO checkins (date, created_at) VALUES (?, ?)', [dayKey(), new Date().toISOString()])
+}
+
+export function loadBudgets(): Budget[] {
+  return all<Budget>('SELECT id, kind, category, period, amount, created_at FROM budgets ORDER BY created_at')
+}
+
+export function loadCloses(): BudgetClose[] {
+  return all<BudgetClose>('SELECT * FROM budget_closes ORDER BY period_start')
+}
+
+export async function saveBudget(b: BudgetInput, id?: string) {
+  if (id) await run('UPDATE budgets SET kind = ?, category = ?, period = ?, amount = ? WHERE id = ?', [b.kind, b.category, b.period, b.amount, id])
+  else await run('INSERT INTO budgets (id, kind, category, period, amount, created_at) VALUES (?, ?, ?, ?, ?, ?)', [uid(), b.kind, b.category, b.period, b.amount, new Date().toISOString()])
+}
+
+export async function deleteBudget(id: string) {
+  await runMany([
+    ['DELETE FROM budget_closes WHERE budget_id = ?', [id]],
+    ['DELETE FROM budgets WHERE id = ?', [id]],
+  ])
+}
+
+export async function closeBudget(c: Omit<BudgetClose, 'created_at'>) {
+  await run(
+    'INSERT OR REPLACE INTO budget_closes (budget_id, period_start, limit_amount, spent, outcome, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [c.budget_id, c.period_start, c.limit_amount, c.spent, c.outcome, c.amount, new Date().toISOString()],
+  )
 }
 
 export async function unlockBadges(ids: string[]) {

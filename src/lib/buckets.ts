@@ -55,7 +55,7 @@ export const BUCKETS: Record<Kind, Bucket> = {
     color: '#3BA7FF',
     soft: '#E2F2FF',
     deep: '#1C7FD6',
-    categories: [c('Emergency fund', '🛟'), c('Goal', '🎯'), c('Rainy day', '☔'), c('Big purchase', '🏍️'), c('Other', '✨')],
+    categories: [c('Emergency fund', '🛟'), c('Goal', '🎯'), c('Rainy day', '☔'), c('Big purchase', '🏍️'), c('Leftovers', '🧺'), c('Other', '✨')],
   },
   investment: {
     kind: 'investment',

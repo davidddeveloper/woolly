@@ -7,11 +7,25 @@ import { monthTotals, pennyLine, pennyMood, weekDots } from '../lib/game'
 import { Penny } from '../components/Penny'
 import { Meadow } from '../components/Meadow'
 import { EntryRow } from '../components/Nav'
+import { BudgetsCard } from '../components/Budgets'
+import type { Budget } from '../lib/budgets'
 import { Card, Chunky, CountUp, Ring, SectionTitle, spring } from '../components/ui'
 import type { Entry } from '../db/repo'
 import { useStore } from '../store'
 
-export function Home({ onAdd, onEdit, onSeeAll, onBarn }: { onAdd: () => void; onEdit: (e: Entry) => void; onSeeAll: () => void; onBarn: () => void }) {
+export function Home({
+  onAdd,
+  onEdit,
+  onSeeAll,
+  onBarn,
+  onBudget,
+}: {
+  onAdd: () => void
+  onEdit: (e: Entry) => void
+  onSeeAll: () => void
+  onBarn: () => void
+  onBudget: (b: Budget | null) => void
+}) {
   const { entries, settings, streak, level, days, checkIn, celebration } = useStore()
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 100))
   const mood = pennyMood(streak)
@@ -74,6 +88,8 @@ export function Home({ onAdd, onEdit, onSeeAll, onBarn }: { onAdd: () => void; o
 
       <div className="relative -mt-6 flex flex-col gap-4 rounded-t-[32px] bg-cream px-4 pt-5">
         <QuestCard logged={streak.loggedToday} streak={streak.current} days={days} onAdd={onAdd} onCheckIn={checkIn} />
+
+        <BudgetsCard onEdit={onBudget} />
 
         {/* month flow */}
         <Card>

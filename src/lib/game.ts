@@ -1,6 +1,7 @@
 import type { Entry, Settings } from '../db/repo'
 import { KINDS, type Kind } from './buckets'
 import { addDays, dayKey, monthKey } from './format'
+import type { BudgetClose } from './budgets'
 
 export type Totals = Record<Kind, number>
 export const emptyTotals = (): Totals => ({ income: 0, expense: 0, saving: 0, investment: 0, buffer: 0 })
@@ -101,6 +102,7 @@ export interface BadgeCtx {
   checkins: string[]
   count: Record<Kind, number>
   months: Map<string, Totals>
+  closes: BudgetClose[]
 }
 
 export interface Badge {
@@ -128,11 +130,13 @@ export const BADGES: Badge[] = [
     id: 'balanced', name: 'Balanced Bale', emoji: '⚖️', how: 'Use all five buckets in one month',
     test: (c) => [...c.months.values()].some((t) => KINDS.every((k) => t[k] > 0)),
   },
+  { id: 'fence', name: 'Inside the Fence', emoji: '🌿', how: 'Finish a budget period without going over', test: (c) => c.closes.some((x) => x.spent <= x.limit_amount) },
+  { id: 'leftovers', name: 'Leftover Lamb', emoji: '🧺', how: 'Sweep budget leftovers into savings 3 times', test: (c) => c.closes.filter((x) => x.outcome === 'saved').length >= 3 },
   { id: 'fifty', name: 'Fifty Hoofprints', emoji: '⭐', how: 'Log 50 entries', test: (c) => c.entries.length >= 50 },
   { id: 'century', name: 'Century Shepherd', emoji: '💯', how: 'Log 100 entries', test: (c) => c.entries.length >= 100 },
 ]
 
-export function earnedBadges(entries: Entry[], checkins: string[], longest: number) {
+export function earnedBadges(entries: Entry[], checkins: string[], longest: number, closes: BudgetClose[] = []) {
   const count = { income: 0, expense: 0, saving: 0, investment: 0, buffer: 0 } as Record<Kind, number>
   const months = new Map<string, Totals>()
   for (const e of entries) {
@@ -142,7 +146,7 @@ export function earnedBadges(entries: Entry[], checkins: string[], longest: numb
     t[e.kind] += e.amount
     months.set(m, t)
   }
-  const ctx: BadgeCtx = { entries, longest, checkins, count, months }
+  const ctx: BadgeCtx = { entries, longest, checkins, count, months, closes }
   return BADGES.filter((b) => b.test(ctx)).map((b) => b.id)
 }
 

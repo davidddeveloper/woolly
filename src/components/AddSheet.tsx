@@ -2,8 +2,9 @@ import { AnimatePresence, motion, useAnimate } from 'motion/react'
 import { ArrowLeft, CalendarDays, Delete, PencilLine, Sprout, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { BUCKETS, categoriesFor, INVESTMENT_HINT, KINDS, type Kind } from '../lib/buckets'
-import { addDays, currencySymbol, dayKey, decimalsFor, friendlyDay, toMajor, toMinor } from '../lib/format'
+import { addDays, currencySymbol, dayKey, decimalsFor, friendlyDay, money, toMajor, toMinor } from '../lib/format'
 import { XP } from '../lib/game'
+import { budgetLabel, budgetStatus, counts, periodNoun, STATE_COLOR } from '../lib/budgets'
 import type { Entry } from '../db/repo'
 import { useStore } from '../store'
 import { Chunky, Sheet, spring } from './ui'
@@ -24,7 +25,7 @@ export function AddSheet({ open, onClose, editing, onDeleted }: Props) {
 }
 
 function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDone: () => void; onDeleted?: (e: Entry) => void }) {
-  const { settings, entries, add, update, remove } = useStore()
+  const { settings, entries, budgets, closes, add, update, remove } = useStore()
   const cur = settings.currency
   const [step, setStep] = useState<'kind' | 'amount'>(editing ? 'amount' : 'kind')
   const [kind, setKind] = useState<Kind>(editing?.kind ?? 'expense')
@@ -75,6 +76,13 @@ function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDon
   const minor = toMinor(Number(amount || 0), cur)
   const b = BUCKETS[kind]
   const showHint = kind === 'expense' && INVESTMENT_HINT.test(note)
+
+  // The budget this entry would count toward (a category budget beats a whole-bucket one).
+  const plan = useMemo(() => {
+    const draft = { kind, category, date } as Entry
+    const b = budgets.filter((x) => counts(x, draft)).sort((a, z) => Number(!!z.category) - Number(!!a.category))[0]
+    return b && budgetStatus(b, editing ? entries.filter((e) => e.id !== editing.id) : entries, closes, date)
+  }, [budgets, closes, entries, editing, kind, category, date])
 
   const save = async () => {
     if (minor <= 0 || saving) return shake()
@@ -209,6 +217,11 @@ function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDon
                 )
               })}
             </div>
+
+            {/* budget preview */}
+            <AnimatePresence initial={false}>
+              {plan && <BudgetHint key={plan.budget.id} s={plan} adding={minor} currency={cur} />}
+            </AnimatePresence>
 
             {/* date + note */}
             <div className="flex gap-2 px-5 pt-3">
@@ -363,4 +376,36 @@ function groupDigits(s: string) {
 
 function trimZeros(s: string) {
   return s.includes('.') ? s.replace(/\.?0+$/, '') : s
+}
+
+function BudgetHint({ s, adding, currency }: { s: ReturnType<typeof budgetStatus>; adding: number; currency: string }) {
+  const after = s.remaining - adding
+  const state = after < 0 ? 'over' : (s.spent + adding) / s.limit >= 0.8 ? 'warn' : 'ok'
+  const tone = STATE_COLOR[state]
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0 }}
+      className="px-5 pt-3"
+    >
+      <div className="flex flex-col gap-1.5 rounded-2xl px-3 py-2.5" style={{ background: tone.soft }}>
+        <div className="num flex items-center justify-between gap-2 text-[13px] font-extrabold" style={{ color: tone.deep }}>
+          <span className="truncate">
+            🎯 {budgetLabel(s.budget)} · {money(Math.max(0, s.remaining), currency)} left this {periodNoun(s.budget.period)}
+          </span>
+          {adding > 0 && <span className="shrink-0">{after >= 0 ? `→ ${money(after, currency)}` : `${money(-after, currency)} over`}</span>}
+        </div>
+        <div className="relative h-2 overflow-hidden rounded-full bg-white/80">
+          <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${Math.min(1, s.spent / s.limit) * 100}%`, background: tone.bar }} />
+          <motion.div
+            className="absolute inset-y-0 rounded-full opacity-45"
+            style={{ left: `${Math.min(1, s.spent / s.limit) * 100}%`, background: tone.bar }}
+            animate={{ width: `${Math.max(0, Math.min(1, (s.spent + adding) / s.limit) - Math.min(1, s.spent / s.limit)) * 100}%` }}
+            transition={spring}
+          />
+        </div>
+      </div>
+    </motion.div>
+  )
 }
