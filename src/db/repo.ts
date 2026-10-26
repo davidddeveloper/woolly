@@ -100,7 +100,7 @@ export async function checkInToday() {
 }
 
 export function loadBudgets(): Budget[] {
-  return all<Budget>('SELECT id, kind, category, period, amount, created_at FROM budgets ORDER BY created_at')
+  return all<Budget>('SELECT id, kind, category, period, amount, note, created_at FROM budgets ORDER BY created_at')
 }
 
 export function loadCloses(): BudgetClose[] {
@@ -108,8 +108,11 @@ export function loadCloses(): BudgetClose[] {
 }
 
 export async function saveBudget(b: BudgetInput, id?: string) {
-  if (id) await run('UPDATE budgets SET kind = ?, category = ?, period = ?, amount = ? WHERE id = ?', [b.kind, b.category, b.period, b.amount, id])
-  else await run('INSERT INTO budgets (id, kind, category, period, amount, created_at) VALUES (?, ?, ?, ?, ?, ?)', [uid(), b.kind, b.category, b.period, b.amount, new Date().toISOString()])
+  if (id) await run('UPDATE budgets SET kind = ?, category = ?, period = ?, amount = ?, note = ? WHERE id = ?', [b.kind, b.category, b.period, b.amount, b.note ?? '', id])
+  else
+    await run('INSERT INTO budgets (id, kind, category, period, amount, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [
+      uid(), b.kind, b.category, b.period, b.amount, b.note ?? '', new Date().toISOString(),
+    ])
 }
 
 export async function deleteBudget(id: string) {

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { BUCKETS, categoryEmoji } from '../lib/buckets'
 import { dayKey, friendlyDay, money } from '../lib/format'
 import { cadenceLabel, type Recurring } from '../lib/recurring'
+import { noteSummary } from '../lib/notes'
 import { useStore } from '../store'
 import { Card, SectionTitle, spring } from './ui'
 
@@ -40,7 +41,7 @@ export function DueCard() {
                 {categoryEmoji(r.kind, r.category, settings.family, goals)}
               </span>
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[15px] font-extrabold">{r.note || r.category}</span>
+                <span className="truncate text-[15px] font-extrabold">{titleOf(r)}</span>
                 <span className="num text-[13px] leading-tight font-bold text-ink/50">
                   <span style={{ color: b.deep }}>{money(r.amount, settings.currency)}</span> · {friendlyDay(r.next_date)}
                 </span>
@@ -83,15 +84,15 @@ export function RepeatingCard() {
               </span>
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-[15px] font-extrabold">
-                  {r.note || r.category} · <span className="num">{money(r.amount, settings.currency)}</span>
+                  {titleOf(r)} · <span className="num">{money(r.amount, settings.currency)}</span>
                 </span>
                 <span className="text-[13px] leading-snug font-bold text-ink/50">
                   {cadenceLabel(r)} · {r.next_date <= dayKey() ? 'due now' : `next ${friendlyDay(r.next_date)}`}
                 </span>
               </span>
               <button
-                aria-label={`Stop repeating ${r.note || r.category}`}
-                onClick={() => confirm(`Stop repeating ${r.note || r.category}? Past entries stay.`) && deleteRecurring(r.id)}
+                aria-label={`Stop repeating ${titleOf(r)}`}
+                onClick={() => confirm(`Stop repeating ${titleOf(r)}? Past entries stay.`) && deleteRecurring(r.id)}
                 className="grid h-10 w-10 place-items-center rounded-full text-ink/35 active:text-expense"
               >
                 <Trash2 size={18} strokeWidth={2.5} />
@@ -103,3 +104,5 @@ export function RepeatingCard() {
     </Card>
   )
 }
+
+const titleOf = (r: Recurring) => noteSummary(r.note).title || r.category

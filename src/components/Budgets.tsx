@@ -95,6 +95,7 @@ function BudgetRow({ s, index, currency, family, onClick }: { s: BudgetStatus; i
             {money(s.spent, currency)} of {money(s.limit, currency)} · this {periodNoun(s.budget.period)}
             {s.carry > 0 && ' (incl. rollover)'}
           </span>
+          {s.budget.note && <span className="truncate text-[13px] font-semibold text-ink/45 italic">“{s.budget.note.split('\n')[0]}”</span>}
         </span>
       </div>
       <div className="relative h-3 w-full rounded-full" style={{ background: tone.soft }}>
@@ -141,6 +142,7 @@ function BudgetForm({ budget, onDone }: { budget: Budget | null; onDone: () => v
   const firstFree = (k: BudgetKind, p: Period) => ['', ...categoriesFor(k, settings.family).map((c) => c.label)].find((c) => !taken(k, c, p)) ?? ''
   const [category, setCategory] = useState(budget?.category ?? firstFree('expense', 'month'))
   const [amount, setAmount] = useState(budget ? String(toMajor(budget.amount, cur)) : '')
+  const [note, setNote] = useState(budget?.note ?? '')
   const b = BUCKETS[kind]
 
   const cats = [{ id: '*', label: '', emoji: b.emoji }, ...categoriesFor(kind, settings.family)]
@@ -156,7 +158,7 @@ function BudgetForm({ budget, onDone }: { budget: Budget | null; onDone: () => v
 
   const save = async () => {
     if (minor <= 0 || clash) return
-    await saveBudget({ kind, category, period, amount: minor }, budget?.id)
+    await saveBudget({ kind, category, period, amount: minor, note: note.trim() }, budget?.id)
     onDone()
   }
 
@@ -251,6 +253,18 @@ function BudgetForm({ budget, onDone }: { budget: Budget | null; onDone: () => v
           )}
           {minor > 0 && <span className="num text-[13px] font-bold text-ink/50">≈ {money(Math.round(perDay), cur)} a day</span>}
         </div>
+      </div>
+
+      <div>
+        <Label>Note (optional)</Label>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={2}
+          maxLength={300}
+          placeholder={kind === 'expense' ? 'What it covers, e.g. trotro to work + Friday Uber' : 'e.g. Mum’s upkeep + school fees'}
+          className="block w-full resize-none rounded-2xl bg-white px-4 py-3 text-[15px] leading-snug font-semibold outline-none shadow-[0_0_0_2px_var(--color-line)_inset] focus:shadow-[0_0_0_2.5px_var(--color-ink)_inset]"
+        />
       </div>
 
       {clash && <p className="-mt-2 text-[13px] font-bold text-expense">You already have this budget — tap it on the Meadow to edit.</p>}
@@ -384,7 +398,7 @@ function Review({ s }: { s: BudgetStatus }) {
             {raise > s.budget.amount && (
               <button
                 disabled={busy}
-                onClick={() => act('over', () => saveBudget({ kind: s.budget.kind, category: s.budget.category, period: s.budget.period, amount: raise }, s.budget.id))}
+                onClick={() => act('over', () => saveBudget({ ...s.budget, amount: raise }, s.budget.id))}
                 className="chunky-soft h-12 rounded-2xl text-[15px] font-extrabold"
               >
                 Raise it to {money(raise, cur)}

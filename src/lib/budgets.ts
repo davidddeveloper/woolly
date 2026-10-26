@@ -12,6 +12,8 @@ export interface Budget {
   category: string
   period: Period
   amount: number
+  /** What the budget covers, in the person's words. */
+  note: string
   created_at: string
 }
 
@@ -26,7 +28,7 @@ export interface BudgetClose {
   created_at: string
 }
 
-export type BudgetInput = Pick<Budget, 'kind' | 'category' | 'period' | 'amount'>
+export type BudgetInput = Pick<Budget, 'kind' | 'category' | 'period' | 'amount' | 'note'>
 
 export interface Range {
   start: string

@@ -6,6 +6,7 @@ import { addDays, currencySymbol, dayKey, decimalsFor, friendlyDay, money, toMaj
 import { XP } from '../lib/game'
 import { budgetLabel, budgetStatus, counts, periodNoun, STATE_COLOR } from '../lib/budgets'
 import { anchorFor, cadenceLabel, type Cadence } from '../lib/recurring'
+import { parseBreakdown } from '../lib/notes'
 import type { Entry } from '../db/repo'
 import { useStore } from '../store'
 import { Chunky, Sheet, spring } from './ui'
@@ -33,7 +34,6 @@ function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDon
   const [amount, setAmount] = useState(editing ? trimZeros(toMajor(editing.amount, cur).toFixed(decimalsFor(cur))) : '')
   const [category, setCategory] = useState(editing?.category ?? '')
   const [note, setNote] = useState(editing?.note ?? '')
-  const [noteOpen, setNoteOpen] = useState(!!editing?.note)
   const [date, setDate] = useState(editing?.date ?? dayKey())
   const [saving, setSaving] = useState(false)
   const [scope, animate] = useAnimate()
@@ -231,11 +231,6 @@ function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDon
             {/* date + note */}
             <div className="flex flex-wrap gap-2 px-5 pt-3">
               <DateChip value={date} onChange={setDate} />
-              {!noteOpen && (
-                <button onClick={() => setNoteOpen(true)} className="flex h-10 items-center gap-1.5 rounded-xl bg-white px-3 text-[15px] font-bold text-ink/70 shadow-[0_0_0_2px_var(--color-line)_inset]">
-                  <PencilLine size={16} strokeWidth={2.5} /> Note
-                </button>
-              )}
               {!editing && (
                 <button
                   onClick={() => setRepeat((r) => (r === null ? 'month' : r === 'month' ? 'week' : null))}
@@ -253,20 +248,14 @@ function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDon
                 </motion.p>
               )}
             </AnimatePresence>
-            <AnimatePresence>
-              {noteOpen && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-5 pt-2">
-                  <input
-                    autoFocus={!editing}
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    placeholder={kind === 'buffer' ? 'School fees for my sister…' : 'What was it for?'}
-                    maxLength={120}
-                    className="h-11 w-full rounded-xl bg-white px-3.5 font-semibold outline-none shadow-[0_0_0_2px_var(--color-line)_inset] focus:shadow-[0_0_0_2px_var(--color-ink)_inset]"
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <NoteField
+              value={note}
+              onChange={setNote}
+              kind={kind}
+              amount={minor}
+              currency={cur}
+              onUseTotal={(total) => setAmount(trimZeros(total.toFixed(decimals)))}
+            />
             <AnimatePresence>
               {showHint && (
                 <motion.button
@@ -427,6 +416,94 @@ function BudgetHint({ s, adding, currency }: { s: ReturnType<typeof budgetStatus
           />
         </div>
       </div>
+    </motion.div>
+  )
+}
+
+/**
+ * A note that can double as a breakdown: "Trotro 20, Uber 45" or one item per line.
+ * When it itemises the money, Penny totals it and checks it against the amount.
+ */
+function NoteField({
+  value,
+  onChange,
+  kind,
+  amount,
+  currency,
+  onUseTotal,
+}: {
+  value: string
+  onChange: (v: string) => void
+  kind: Kind
+  amount: number
+  currency: string
+  onUseTotal: (majorTotal: number) => void
+}) {
+  const [open, setOpen] = useState(!!value)
+  const ref = useRef<HTMLTextAreaElement>(null)
+  const { items, total } = useMemo(() => parseBreakdown(value), [value])
+  const totalMinor = toMinor(total, currency)
+  const diff = amount - totalMinor
+
+  // Grow with the text, up to about six lines.
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 150)}px`
+  }, [value, open])
+
+  if (!open)
+    return (
+      <div className="px-5 pt-2">
+        <button
+          onClick={() => setOpen(true)}
+          className="flex h-11 w-full items-center gap-2 rounded-xl bg-white px-3.5 text-left text-[15px] font-bold text-ink/45 shadow-[0_0_0_2px_var(--color-line)_inset]"
+        >
+          <PencilLine size={16} strokeWidth={2.5} /> Add a note or breakdown
+        </button>
+      </div>
+    )
+
+  return (
+    <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="px-5 pt-2">
+      <textarea
+        ref={ref}
+        autoFocus={!value}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={2}
+        maxLength={500}
+        placeholder={kind === 'buffer' ? 'School fees for my sister…' : 'What was it for? Or a breakdown, e.g.\nTrotro 20, Uber 45, Fuel 250'}
+        className="no-scrollbar block w-full resize-none rounded-xl bg-white px-3.5 py-2.5 text-[15px] leading-snug font-semibold outline-none shadow-[0_0_0_2px_var(--color-line)_inset] focus:shadow-[0_0_0_2px_var(--color-ink)_inset]"
+      />
+      <AnimatePresence initial={false}>
+        {items.length >= 2 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="num mt-1.5 px-1 text-[13px] font-extrabold"
+          >
+            <div className="flex min-h-7 items-center gap-2">
+              <span className="whitespace-nowrap text-ink/55">
+                🧾 {items.length} items · {money(totalMinor, currency)}
+              </span>
+              <span className="flex-1" />
+              {amount > 0 && diff === 0 ? (
+                <span className="text-meadow-deep">✓ adds up</span>
+              ) : (
+                <button onClick={() => onUseTotal(total)} className="rounded-lg bg-ink px-2.5 py-1 whitespace-nowrap text-white">
+                  Use {money(totalMinor, currency)}
+                </button>
+              )}
+            </div>
+            {amount > 0 && diff !== 0 && (
+              <p className="mt-0.5 text-ink/40">{diff > 0 ? `${money(diff, currency)} of the amount isn't itemised` : `Items add up to ${money(-diff, currency)} more than the amount`}</p>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

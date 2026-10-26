@@ -64,6 +64,7 @@ const MIGRATIONS: string[] = [
     reached_at  TEXT
   );
   `,
+  `ALTER TABLE budgets ADD COLUMN note TEXT NOT NULL DEFAULT '';`,
 ]
 
 let db: Database | null = null
