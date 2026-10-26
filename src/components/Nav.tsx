@@ -1,5 +1,6 @@
 import { motion } from 'motion/react'
 import { Home, PieChart, Plus, ReceiptText, Warehouse } from 'lucide-react'
+import type { CSSProperties } from 'react'
 import type { Entry } from '../db/repo'
 import { BUCKETS, categoryEmoji } from '../lib/buckets'
 import { money } from '../lib/format'
@@ -14,19 +15,35 @@ const TABS: { id: Tab; label: string; Icon: typeof Home }[] = [
   { id: 'barn', label: 'Barn', Icon: Warehouse },
 ]
 
+const INK = '#26232E'
+const MUTED = 'rgba(38,35,46,.42)'
+
+/**
+ * Floating tab bar. Green is reserved for the one primary action (+); the active tab
+ * reads through ink colour and a soft wool pill so the two never compete.
+ */
 export function BottomNav({ tab, onTab, onAdd, pulse }: { tab: Tab; onTab: (t: Tab) => void; onAdd: () => void; pulse: boolean }) {
   const left = TABS.slice(0, 2)
   const right = TABS.slice(2)
   const item = ({ id, label, Icon }: (typeof TABS)[number]) => {
     const on = tab === id
     return (
-      <button key={id} onClick={() => onTab(id)} className="flex h-16 min-w-0 flex-1 items-center justify-center" aria-label={label}>
-        <span className="relative flex flex-col items-center gap-0.5 px-3.5 py-1.5">
-          {on && <motion.span layoutId="nav-pill" className="absolute inset-0 rounded-2xl bg-meadow-soft" transition={spring} />}
-          <motion.span className="relative" animate={{ y: on ? -1 : 0, scale: on ? 1.08 : 1 }} transition={spring}>
-            <Icon size={24} strokeWidth={on ? 2.75 : 2.25} color={on ? '#1F9A5C' : 'rgba(38,35,46,.45)'} />
+      <button
+        key={id}
+        onClick={() => {
+          navigator.vibrate?.(6)
+          onTab(id)
+        }}
+        className="flex h-[62px] min-w-0 flex-1 items-center justify-center"
+        aria-label={label}
+        aria-current={on ? 'page' : undefined}
+      >
+        <span className="relative flex flex-col items-center gap-0.5 px-3 py-1.5">
+          {on && <motion.span layoutId="nav-pill" className="absolute inset-0 rounded-[16px] bg-wool" transition={spring} />}
+          <motion.span className="relative" animate={{ y: on ? -1 : 0 }} transition={spring}>
+            <Icon size={23} strokeWidth={on ? 2.6 : 2.2} color={on ? INK : MUTED} />
           </motion.span>
-          <span className="relative text-[12px] font-extrabold whitespace-nowrap" style={{ color: on ? '#1F9A5C' : 'rgba(38,35,46,.45)' }}>
+          <span className="relative text-[11px] font-extrabold whitespace-nowrap" style={{ color: on ? INK : MUTED }}>
             {label}
           </span>
         </span>
@@ -34,28 +51,30 @@ export function BottomNav({ tab, onTab, onAdd, pulse }: { tab: Tab; onTab: (t: T
     )
   }
   return (
-    <nav
-      className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-[480px] border-t border-line/70 bg-white/85 backdrop-blur-xl"
-      style={{ paddingBottom: 'calc(var(--safe-bottom) + 4px)' }}
-    >
-      <div className="flex items-center px-2 pt-1">
+    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto max-w-[480px] px-3" style={{ paddingBottom: 'calc(var(--safe-bottom) + 10px)' }}>
+      <div className="pointer-events-auto relative flex items-center rounded-[26px] bg-white/92 px-1 shadow-[0_14px_34px_-14px_rgba(80,52,14,.45),0_0_0_1px_rgba(240,228,210,.95)] backdrop-blur-xl">
         {left.map(item)}
-        <div className="relative flex w-20 justify-center">
-          {pulse && (
-            <motion.span
-              className="absolute -top-7 h-16 w-16 rounded-full bg-meadow"
-              animate={{ scale: [1, 1.45], opacity: [0.45, 0] }}
-              transition={{ duration: 1.6, repeat: Infinity, ease: 'easeOut' }}
-            />
-          )}
-          <motion.button
-            aria-label="Log money"
-            onClick={onAdd}
-            whileTap={{ scale: 0.88, rotate: 90 }}
-            className="chunky absolute -top-7 grid h-16 w-16 place-items-center rounded-full text-white"
-          >
-            <Plus size={32} strokeWidth={3.25} />
-          </motion.button>
+        <div className="relative w-[78px] shrink-0 self-stretch">
+          {/* the white collar makes the button look set into the bar */}
+          <div className="absolute -top-[32px] left-1/2 grid -translate-x-1/2 place-items-center rounded-full bg-white p-[5px] shadow-[0_-8px_18px_-12px_rgba(80,52,14,.5)]">
+            {pulse && (
+              <motion.span
+                className="absolute inset-[5px] rounded-full bg-meadow"
+                animate={{ scale: [1, 1.5], opacity: [0.4, 0] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
+              />
+            )}
+            <motion.button
+              aria-label="Log money"
+              onClick={onAdd}
+              whileTap={{ scale: 0.9, rotate: 90 }}
+              className="chunky relative grid h-[60px] w-[60px] place-items-center rounded-full text-white"
+              style={{ '--btn': 'linear-gradient(180deg, #4AD891 0%, #2FB572 100%)' } as CSSProperties}
+            >
+              <Plus size={30} strokeWidth={3.25} />
+            </motion.button>
+          </div>
+          <span className="absolute inset-x-0 bottom-[8px] text-center text-[11px] font-extrabold text-meadow-deep">Log</span>
         </div>
         {right.map(item)}
       </div>
