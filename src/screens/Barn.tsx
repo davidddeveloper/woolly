@@ -2,6 +2,7 @@ import { motion } from 'motion/react'
 import { Download, Lock, Share, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Penny } from '../components/Penny'
+import { Outfit } from '../components/Outfits'
 import { Card, SectionTitle, spring } from '../components/ui'
 import { exportFile, importFile, wipe } from '../db/sqlite'
 import { CURRENCIES, dayKey } from '../lib/format'
@@ -112,14 +113,16 @@ export function Barn({ toast }: { toast: (t: string) => void }) {
                   key={o.id}
                   whileTap={{ scale: 0.9 }}
                   onClick={() => wear(o.id, o.level)}
-                  className="relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-2xl"
+                  className="relative flex flex-col items-center gap-1 rounded-2xl p-1 pb-1.5"
                   style={{ background: on ? '#DEF6E8' : '#FFF8EE', boxShadow: on ? '0 0 0 2.5px #34C17B inset' : undefined }}
                 >
-                  <span className="text-[28px]" style={{ filter: locked ? 'grayscale(1) opacity(.35)' : undefined }}>
-                    {o.emoji}
-                  </span>
-                  <span className="text-[11px] font-extrabold text-ink/60">{locked ? `Lv ${o.level}` : o.label}</span>
-                  {locked && <Lock size={14} className="absolute top-2 right-2 text-ink/35" strokeWidth={3} />}
+                  <WardrobeThumb id={o.id} locked={locked} />
+                  <span className="text-[11px] leading-tight font-extrabold whitespace-nowrap text-ink/60">{locked ? `Lv ${o.level}` : o.label}</span>
+                  {locked && (
+                    <span className="absolute top-1.5 right-1.5 grid h-6 w-6 place-items-center rounded-full bg-white/90 shadow-[var(--shadow-card)]">
+                      <Lock size={12} className="text-ink/50" strokeWidth={3} />
+                    </span>
+                  )}
                 </motion.button>
               )
             })}
@@ -250,6 +253,28 @@ export function Barn({ toast }: { toast: (t: string) => void }) {
         </p>
       </div>
     </div>
+  )
+}
+
+/** Crop windows [x, y, size] in the render's pixel space, framing Penny's head plus the item. */
+const THUMB_CROP: Record<string, [number, number, number]> = {
+  scarf: [80, 40, 720],
+  bowtie: [80, 40, 720],
+  beanie: [100, -200, 720],
+  crown: [100, -150, 700],
+  party: [80, -290, 800],
+}
+
+/** Penny wearing an item, so you see the look before you pick it. */
+function WardrobeThumb({ id, locked }: { id: string; locked: boolean }) {
+  const [x, y, size] = THUMB_CROP[id] ?? [110, -60, 680]
+  return (
+    <span className="relative block aspect-square w-full overflow-hidden rounded-xl" style={{ filter: locked ? 'grayscale(1) opacity(.4)' : undefined }}>
+      <span className="absolute block" style={{ width: `${(810 / size) * 100}%`, aspectRatio: '810 / 1053', left: `${(-x / size) * 100}%`, top: `${(-y / size) * 100}%` }}>
+        <img src="/penny.webp" alt="" draggable={false} className="absolute inset-0 h-full w-full" />
+        <Outfit id={id} />
+      </span>
+    </span>
   )
 }
 
