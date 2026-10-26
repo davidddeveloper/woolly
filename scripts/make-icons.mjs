@@ -4,9 +4,10 @@ import sharp from 'sharp'
 const SRC = 'assets-src/penny-3d.png'
 const BLINK = 'assets-src/penny-3d-blink.png'
 
-// Mascot, sized for retina phones (rendered at ~260pt wide max).
+// Mascot, sized for retina phones (rendered at ~220pt wide max). Kept small because it's
+// the first thing on screen: index.html preloads both frames before any JS runs.
 for (const [src, out] of [[SRC, 'penny.webp'], [BLINK, 'penny-blink.webp']]) {
-  await sharp(src).resize({ width: 600 }).webp({ quality: 88, alphaQuality: 95 }).toFile(`public/${out}`)
+  await sharp(src).resize({ width: 540 }).webp({ quality: 80, alphaQuality: 90, effort: 6 }).toFile(`public/${out}`)
 }
 
 // Icon: Penny's head on a warm meadow-sunrise tile.

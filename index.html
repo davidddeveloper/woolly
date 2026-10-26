@@ -12,9 +12,20 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Woolly</title>
+    <!-- Penny is the first thing on screen: fetch her alongside the JS, not after it. -->
+    <link rel="preload" as="image" href="/penny.webp" type="image/webp" fetchpriority="high" />
+    <link rel="preload" as="image" href="/penny-blink.webp" type="image/webp" />
+    <style>
+      html, body, #root { height: 100%; margin: 0; background: #fff8ee; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Instant splash; React replaces it on first render with the same Penny. -->
+      <div style="height: 100%; display: grid; place-items: center">
+        <img src="/penny.webp" width="140" height="182" alt="" />
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
