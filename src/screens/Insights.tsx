@@ -2,9 +2,10 @@ import { AnimatePresence, motion } from 'motion/react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { BUCKETS, categoryEmoji, OUT_KINDS, type Kind } from '../lib/buckets'
-import { addMonths, dayKey, money, monthKey, monthLabel } from '../lib/format'
+import { addDays, addMonths, dayKey, money, monthKey, monthLabel, parseDay } from '../lib/format'
 import { monthTotals, totalsFor } from '../lib/game'
 import { Card, CountUp, SectionTitle, spring } from '../components/ui'
+import { budgetEmoji, budgetLabel, budgetStatus, periodRange, STATE_COLOR, type BudgetStatus } from '../lib/budgets'
 import { useStore } from '../store'
 
 export function Insights() {
@@ -101,6 +102,8 @@ export function Insights() {
               })}
             </div>
           </Card>
+
+          <BudgetHistory month={month} />
 
           <Breakdown title="Where spending went" kind="expense" rows={spend} currency={cur} family={settings.family} empty="No expenses this month. Frugal sheep!" />
           <Breakdown title="Family & giving" kind="buffer" rows={given} currency={cur} family={settings.family} empty="No gifts logged yet this month." />
@@ -240,6 +243,96 @@ function Breakdown({ title, kind, rows, currency, family, empty }: { title: stri
           ))}
         </div>
       )}
+    </Card>
+  )
+}
+
+/** How each budget did in the month on screen. Weekly budgets count the weeks that started in it. */
+function BudgetHistory({ month }: { month: string }) {
+  const { budgets, entries, closes, settings } = useStore()
+  const cur = settings.currency
+  const today = dayKey()
+  const first = `${month}-01`
+  const last = periodRange('month', first).end
+  const rows = useMemo(
+    () =>
+      budgets
+        .filter((b) => b.created_at.slice(0, 10) <= last && first <= today)
+        .map((b) => {
+          if (b.period === 'month') return { b, month: budgetStatus(b, entries, closes, first), weeks: [] as BudgetStatus[] }
+          const weeks: BudgetStatus[] = []
+          for (let d = periodRange('week', first).start; d <= last && d <= today; d = addDays(d, 7))
+            if (d >= first) weeks.push(budgetStatus(b, entries, closes, d))
+          return { b, month: null, weeks }
+        }),
+    [budgets, entries, closes, first, last, today],
+  )
+  if (!rows.length) return null
+  return (
+    <Card>
+      <SectionTitle>Budgets</SectionTitle>
+      <div className="flex flex-col gap-4">
+        {rows.map(({ b, month: m, weeks }, i) => {
+          const label = budgetLabel(b)
+          const emoji = budgetEmoji(b, settings.family)
+          if (m) {
+            const tone = STATE_COLOR[m.spent > m.limit ? 'over' : m.range.left > 0 ? m.state : 'ok']
+            const ended = m.range.left === 0
+            return (
+              <div key={b.id}>
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="truncate text-[15px] font-extrabold">
+                    {emoji} {label}
+                  </span>
+                  <span className="num shrink-0 text-[13px] font-black" style={{ color: tone.deep }}>
+                    {m.remaining < 0 ? `Over ${money(-m.remaining, cur)}` : ended ? `Kept ${money(m.remaining, cur)}` : `${money(m.remaining, cur)} left`}
+                  </span>
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full" style={{ background: tone.soft }}>
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ background: tone.bar }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(1, m.pct) * 100}%` }}
+                    transition={{ duration: 0.8, delay: 0.1 + i * 0.06, ease: [0.16, 1, 0.3, 1] }}
+                  />
+                </div>
+                <span className="num mt-1 block text-[12px] font-bold text-ink/45">
+                  {money(m.spent, cur)} of {money(m.limit, cur)} · monthly
+                </span>
+              </div>
+            )
+          }
+          const inside = weeks.filter((w) => w.spent <= w.limit).length
+          return (
+            <div key={b.id}>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <span className="truncate text-[15px] font-extrabold">
+                  {emoji} {label}
+                </span>
+                <span className="num shrink-0 text-[13px] font-black text-ink/55">
+                  {inside}/{weeks.length} weeks inside
+                </span>
+              </div>
+              <div className="flex gap-1.5">
+                {weeks.map((w) => {
+                  const tone = STATE_COLOR[w.spent > w.limit ? 'over' : 'ok']
+                  return (
+                    <div key={w.range.start} className="flex flex-1 flex-col gap-1">
+                      <div className="h-2.5 overflow-hidden rounded-full" style={{ background: tone.soft }}>
+                        <div className="h-full rounded-full" style={{ width: `${Math.min(1, w.pct) * 100}%`, background: tone.bar }} />
+                      </div>
+                      <span className="text-center text-[11px] font-bold text-ink/40">
+                        {parseDay(w.range.start).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </Card>
   )
 }
