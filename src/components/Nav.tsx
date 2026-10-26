@@ -2,7 +2,7 @@ import { motion } from 'motion/react'
 import { Home, PieChart, Plus, ReceiptText, Warehouse } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import type { Entry } from '../db/repo'
-import { BUCKETS, categoryEmoji } from '../lib/buckets'
+import { BUCKETS, categoryEmoji, type GoalCategory } from '../lib/buckets'
 import { money } from '../lib/format'
 import { spring } from './ui'
 
@@ -82,7 +82,21 @@ export function BottomNav({ tab, onTab, onAdd, pulse }: { tab: Tab; onTab: (t: T
   )
 }
 
-export function EntryRow({ e, currency, family, onClick, index = 0 }: { e: Entry; currency: string; family: string[]; onClick?: () => void; index?: number }) {
+export function EntryRow({
+  e,
+  currency,
+  family,
+  goals,
+  onClick,
+  index = 0,
+}: {
+  e: Entry
+  currency: string
+  family: string[]
+  goals?: GoalCategory[]
+  onClick?: () => void
+  index?: number
+}) {
   const b = BUCKETS[e.kind]
   const sign = e.kind === 'income' ? '+' : e.kind === 'expense' ? '−' : ''
   return (
@@ -97,7 +111,7 @@ export function EntryRow({ e, currency, family, onClick, index = 0 }: { e: Entry
       className="flex w-full items-center gap-3 rounded-2xl px-2 py-2.5 text-left active:bg-wool/60"
     >
       <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-[22px]" style={{ background: b.soft }}>
-        {categoryEmoji(e.kind, e.category, family)}
+        {categoryEmoji(e.kind, e.category, family, goals)}
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-[15px] font-extrabold">{e.note || e.category}</span>

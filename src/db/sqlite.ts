@@ -42,6 +42,28 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (budget_id, period_start)
   );
   `,
+  `
+  CREATE TABLE recurring (
+    id          TEXT PRIMARY KEY,
+    kind        TEXT NOT NULL CHECK (kind IN ('income','expense','saving','investment','buffer')),
+    amount      INTEGER NOT NULL CHECK (amount > 0),
+    category    TEXT NOT NULL,
+    note        TEXT NOT NULL DEFAULT '',
+    cadence     TEXT NOT NULL CHECK (cadence IN ('week','month')),
+    anchor      INTEGER NOT NULL,                       -- weekday (Mon = 0) or day of month (1-31)
+    next_date   TEXT NOT NULL,                          -- YYYY-MM-DD of the next occurrence
+    created_at  TEXT NOT NULL
+  );
+  CREATE TABLE goals (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL UNIQUE,                   -- also the saving category it collects
+    emoji       TEXT NOT NULL,
+    target      INTEGER NOT NULL CHECK (target > 0),
+    deadline    TEXT,                                   -- YYYY-MM-DD, optional
+    created_at  TEXT NOT NULL,
+    reached_at  TEXT
+  );
+  `,
 ]
 
 let db: Database | null = null

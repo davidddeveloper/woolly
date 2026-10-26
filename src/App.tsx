@@ -2,12 +2,14 @@ import { motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { AddSheet } from './components/AddSheet'
 import { BudgetSheet, ReviewSheet } from './components/Budgets'
+import { GoalSheet } from './components/Goals'
 import { Celebration } from './components/Celebration'
 import { BottomNav, type Tab } from './components/Nav'
 import { Penny } from './components/Penny'
 import { useToast } from './components/ui'
 import type { Entry } from './db/repo'
 import type { Budget } from './lib/budgets'
+import type { Goal } from './lib/goals'
 import { Activity } from './screens/Activity'
 import { Barn } from './screens/Barn'
 import { Home } from './screens/Home'
@@ -24,6 +26,7 @@ export default function App() {
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Entry | null>(null)
   const [budget, setBudget] = useState<{ open: boolean; value: Budget | null }>({ open: false, value: null })
+  const [goal, setGoal] = useState<{ open: boolean; value: Goal | null }>({ open: false, value: null })
   const [reviewHidden, setReviewHidden] = useState(false)
   const toast = useToast()
   const scroller = useRef<HTMLDivElement>(null)
@@ -57,7 +60,16 @@ export default function App() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ type: 'spring', stiffness: 420, damping: 40 }}
         >
-          {tab === 'home' && <Home onAdd={() => setAdding(true)} onEdit={openEdit} onSeeAll={() => go('activity')} onBarn={() => go('barn')} onBudget={(b) => setBudget({ open: true, value: b })} />}
+          {tab === 'home' && (
+            <Home
+              onAdd={() => setAdding(true)}
+              onEdit={openEdit}
+              onSeeAll={() => go('activity')}
+              onBarn={() => go('barn')}
+              onBudget={(b) => setBudget({ open: true, value: b })}
+              onGoal={(g) => setGoal({ open: true, value: g })}
+            />
+          )}
           {tab === 'activity' && <Activity onEdit={openEdit} onAdd={() => setAdding(true)} />}
           {tab === 'insights' && <Insights />}
           {tab === 'barn' && <Barn toast={(t) => toast.show(t)} />}
@@ -74,9 +86,10 @@ export default function App() {
         onDeleted={onDeleted}
       />
       <BudgetSheet open={budget.open} budget={budget.value} onClose={() => setBudget((b) => ({ ...b, open: false }))} />
+      <GoalSheet open={goal.open} goal={goal.value} onClose={() => setGoal((g) => ({ ...g, open: false }))} />
       {/* Wrap up ended budget periods on the Meadow, one at a time, when nothing else is on screen. */}
       <ReviewSheet
-        open={tab === 'home' && !reviewHidden && !adding && !budget.open && !celebration}
+        open={tab === 'home' && !reviewHidden && !adding && !budget.open && !goal.open && !celebration}
         review={reviews[0]}
         onClose={() => setReviewHidden(true)}
       />

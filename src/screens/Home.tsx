@@ -8,7 +8,10 @@ import { Penny } from '../components/Penny'
 import { Meadow } from '../components/Meadow'
 import { EntryRow } from '../components/Nav'
 import { BudgetsCard } from '../components/Budgets'
-import type { Budget } from '../lib/budgets'
+import { GoalsCard } from '../components/Goals'
+import { DueCard } from '../components/Recurring'
+import { budgetLabel, budgetStatus, periodNoun, type Budget, type BudgetStatus } from '../lib/budgets'
+import type { Goal } from '../lib/goals'
 import { Card, Chunky, CountUp, Ring, SectionTitle, spring } from '../components/ui'
 import type { Entry } from '../db/repo'
 import { useStore } from '../store'
@@ -19,17 +22,24 @@ export function Home({
   onSeeAll,
   onBarn,
   onBudget,
+  onGoal,
 }: {
   onAdd: () => void
   onEdit: (e: Entry) => void
   onSeeAll: () => void
   onBarn: () => void
   onBudget: (b: Budget | null) => void
+  onGoal: (g: Goal | null) => void
 }) {
-  const { entries, settings, streak, level, days, checkIn, celebration } = useStore()
+  const { entries, settings, streak, level, days, checkIn, celebration, goals, budgets, closes } = useStore()
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 100))
   const mood = pennyMood(streak)
-  const line = pennyLine(mood, settings.name, streak.current, seed)
+  const stretched = useMemo(() => mostStretched(budgets.map((b) => budgetStatus(b, entries, closes))), [budgets, entries, closes])
+  // Every other tap, Penny mentions the budget that needs care (never while she's asleep).
+  const line =
+    stretched && mood !== 'sleepy' && seed % 2 === 0
+      ? budgetLine(stretched, settings.name, settings.currency)
+      : pennyLine(mood, settings.name, streak.current, seed)
   const month = monthKey(dayKey())
   const t = useMemo(() => monthTotals(entries, month), [entries, month])
   const cur = settings.currency
@@ -87,9 +97,13 @@ export function Home({
       </Meadow>
 
       <div className="relative -mt-6 flex flex-col gap-4 rounded-t-[32px] bg-cream px-4 pt-5">
+        <DueCard />
+
         <QuestCard logged={streak.loggedToday} streak={streak.current} days={days} onAdd={onAdd} onCheckIn={checkIn} />
 
         <BudgetsCard onEdit={onBudget} />
+
+        <GoalsCard onEdit={onGoal} />
 
         {/* month flow */}
         <Card>
@@ -171,7 +185,7 @@ export function Home({
           ) : (
             <Card className="p-2">
               {entries.slice(0, 5).map((e, i) => (
-                <EntryRow key={e.id} e={e} index={i} currency={cur} family={settings.family} onClick={() => onEdit(e)} />
+                <EntryRow key={e.id} e={e} index={i} currency={cur} family={settings.family} goals={goals} onClick={() => onEdit(e)} />
               ))}
             </Card>
           )}
@@ -179,6 +193,20 @@ export function Home({
       </div>
     </div>
   )
+}
+
+const STRETCH_RANK = { over: 3, warn: 2, fast: 1, ok: 0 } as const
+
+function mostStretched(rows: BudgetStatus[]) {
+  const worst = [...rows].sort((a, b) => STRETCH_RANK[b.state] - STRETCH_RANK[a.state])[0]
+  return worst && worst.state !== 'ok' ? worst : null
+}
+
+function budgetLine(s: BudgetStatus, name: string, currency: string) {
+  const label = budgetLabel(s.budget)
+  if (s.state === 'over') return `${label} hopped the fence this ${periodNoun(s.budget.period)}. Let's tiptoe till it resets 🐾`
+  if (s.state === 'warn') return `Easy on ${label} — ${money(Math.floor(s.daily), currency)} a day keeps us inside the fence.`
+  return `${label} is running ahead of plan. Slow and steady, ${name || 'friend'}!`
 }
 
 function QuestCard({ logged, streak, days, onAdd, onCheckIn }: { logged: boolean; streak: number; days: Set<string>; onAdd: () => void; onCheckIn: () => void }) {

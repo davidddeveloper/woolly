@@ -296,8 +296,10 @@ export function ReviewSheet({ open, review, onClose }: { open: boolean; review: 
 }
 
 function Review({ s }: { s: BudgetStatus }) {
-  const { settings, resolveReview, saveBudget } = useStore()
+  const { settings, goals, resolveReview, saveBudget } = useStore()
   const [busy, setBusy] = useState(false)
+  const open = goals.filter((g) => !g.reached_at)
+  const [into, setInto] = useState(open[0]?.name ?? 'Leftovers')
   const cur = settings.currency
   const label = budgetLabel(s.budget)
   const kept = s.remaining
@@ -309,7 +311,7 @@ function Review({ s }: { s: BudgetStatus }) {
     if (busy) return
     setBusy(true)
     await then?.()
-    await resolveReview(s, o)
+    await resolveReview(s, o, into)
   }
 
   return (
@@ -335,8 +337,27 @@ function Review({ s }: { s: BudgetStatus }) {
           <div className="mt-5 flex w-full flex-col gap-2">
             {kept > 0 ? (
               <>
+                {open.length > 0 && (
+                  <div className="no-scrollbar -mx-5 mb-1 flex items-center gap-2 overflow-x-auto px-5">
+                    <span className="shrink-0 text-[13px] font-extrabold text-ink/45">Into</span>
+                    {[...open.map((g) => [g.name, g.emoji]), ['Leftovers', '🧺']].map(([n, e]) => (
+                      <button
+                        key={n}
+                        onClick={() => setInto(n)}
+                        className="flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-[13px] font-extrabold"
+                        style={
+                          n === into
+                            ? { background: BUCKETS.saving.soft, color: BUCKETS.saving.deep, boxShadow: `0 0 0 2px ${BUCKETS.saving.color} inset` }
+                            : { background: '#fff', color: 'rgba(38,35,46,.6)', boxShadow: '0 0 0 2px var(--color-line) inset' }
+                        }
+                      >
+                        {e} {n}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <Chunky color={BUCKETS.saving.color} deep={BUCKETS.saving.deep} disabled={busy} onClick={() => act('saved')}>
-                  🐷 Save it
+                  🐷 Save it{into !== 'Leftovers' && ` to ${into}`}
                 </Chunky>
                 <div className="grid grid-cols-2 gap-2">
                   <Choice onClick={() => act('treat')} disabled={busy} emoji="🍦" title="Treat myself" sub={`Up to ${money(kept, cur)}, guilt-free`} />

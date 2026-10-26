@@ -3,6 +3,7 @@ import { Download, Lock, Share, Upload } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Penny } from '../components/Penny'
 import { Outfit } from '../components/Outfits'
+import { RepeatingCard } from '../components/Recurring'
 import { Card, SectionTitle, spring } from '../components/ui'
 import { exportFile, importFile, wipe } from '../db/sqlite'
 import { CURRENCIES, dayKey } from '../lib/format'
@@ -220,6 +221,8 @@ export function Barn({ toast }: { toast: (t: string) => void }) {
             <p className="mt-1 text-[12px] font-bold text-ink/45">Comma separated. These become Buffer categories.</p>
           </Field>
         </Card>
+
+        <RepeatingCard />
 
         {/* data */}
         <Card className="flex flex-col gap-2">

@@ -10,7 +10,7 @@ import type { Entry } from '../db/repo'
 import { useStore } from '../store'
 
 export function Activity({ onEdit, onAdd }: { onEdit: (e: Entry) => void; onAdd: () => void }) {
-  const { entries, settings } = useStore()
+  const { entries, settings, goals } = useStore()
   const [filter, setFilter] = useState<Kind | 'all'>('all')
   const [q, setQ] = useState('')
   const [searching, setSearching] = useState(false)
@@ -115,7 +115,7 @@ export function Activity({ onEdit, onAdd }: { onEdit: (e: Entry) => void; onAdd:
                 <Card className="p-2">
                   <AnimatePresence initial={false}>
                     {list.map((e, i) => (
-                      <EntryRow key={e.id} e={e} index={i} currency={settings.currency} family={settings.family} onClick={() => onEdit(e)} />
+                      <EntryRow key={e.id} e={e} index={i} currency={settings.currency} family={settings.family} goals={goals} onClick={() => onEdit(e)} />
                     ))}
                   </AnimatePresence>
                 </Card>

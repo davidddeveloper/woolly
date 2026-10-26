@@ -94,12 +94,23 @@ const FAMILY_EMOJI: Record<string, string> = {
   kids: '🧒', children: '🧒', relatives: '👪', friends: '🫶', charity: '🤲', church: '⛪', grandma: '👵', grandpa: '👴',
 }
 
-export function categoriesFor(kind: Kind, family: string[]): Category[] {
+/** Savings goals show up as saving categories, first in line. */
+export type GoalCategory = { name: string; emoji: string; reached_at?: string | null }
+
+export function categoriesFor(kind: Kind, family: string[], goals: GoalCategory[] = []): Category[] {
+  if (kind === 'saving') {
+    const own = goals.filter((g) => !g.reached_at).map((g) => c(g.name, g.emoji))
+    return [...own, ...BUCKETS.saving.categories.filter((x) => !own.some((g) => g.label === x.label))]
+  }
   if (kind !== 'buffer') return BUCKETS[kind].categories
   return [...family.map((name) => c(name, FAMILY_EMOJI[name.toLowerCase()] ?? '💛')), c('Other', '✨')]
 }
 
-export function categoryEmoji(kind: Kind, label: string, family: string[]) {
+export function categoryEmoji(kind: Kind, label: string, family: string[], goals: GoalCategory[] = []) {
+  if (kind === 'saving') {
+    const g = goals.find((x) => x.name === label)
+    if (g) return g.emoji
+  }
   return categoriesFor(kind, family).find((x) => x.label === label)?.emoji ?? BUCKETS[kind].emoji
 }
 

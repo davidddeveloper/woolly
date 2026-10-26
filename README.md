@@ -31,6 +31,8 @@ Schema: `src/db/sqlite.ts` (append to `MIGRATIONS` to change it).
 - `src/lib/game.ts`: streaks, XP/levels, badges, wardrobe, Penny's moods and lines
 - `src/lib/budgets.ts`: weekly/monthly budgets: periods, pace, alerts at 80%/100%, end-of-period reviews
 - `src/components/Budgets.tsx`: Meadow budgets card, budget editor, period wrap-up (save / treat / roll over)
+- `src/lib/goals.ts` + `src/components/Goals.tsx`: savings goals (a goal's name is the saving category it collects)
+- `src/lib/recurring.ts` + `src/components/Recurring.tsx`: repeating entries, confirmed with one tap when due
 - `src/components/Penny.tsx`: mascot (blink, idle, jump, mood effects) · `Outfits.tsx`: the wardrobe
 - `src/components/AddSheet.tsx`: logging flow · `Celebration.tsx`: reward moments
 - `src/screens/*`: Meadow (home), Activity, Insights, Barn, Onboarding

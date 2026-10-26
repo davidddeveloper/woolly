@@ -1,10 +1,11 @@
 import { AnimatePresence, motion, useAnimate } from 'motion/react'
-import { ArrowLeft, CalendarDays, Delete, PencilLine, Sprout, Trash2 } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Delete, PencilLine, Repeat2, Sprout, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { BUCKETS, categoriesFor, INVESTMENT_HINT, KINDS, type Kind } from '../lib/buckets'
 import { addDays, currencySymbol, dayKey, decimalsFor, friendlyDay, money, toMajor, toMinor } from '../lib/format'
 import { XP } from '../lib/game'
 import { budgetLabel, budgetStatus, counts, periodNoun, STATE_COLOR } from '../lib/budgets'
+import { anchorFor, cadenceLabel, type Cadence } from '../lib/recurring'
 import type { Entry } from '../db/repo'
 import { useStore } from '../store'
 import { Chunky, Sheet, spring } from './ui'
@@ -25,7 +26,7 @@ export function AddSheet({ open, onClose, editing, onDeleted }: Props) {
 }
 
 function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDone: () => void; onDeleted?: (e: Entry) => void }) {
-  const { settings, entries, budgets, closes, add, update, remove } = useStore()
+  const { settings, entries, budgets, closes, goals, add, update, remove, addRecurring } = useStore()
   const cur = settings.currency
   const [step, setStep] = useState<'kind' | 'amount'>(editing ? 'amount' : 'kind')
   const [kind, setKind] = useState<Kind>(editing?.kind ?? 'expense')
@@ -37,12 +38,13 @@ function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDon
   const [saving, setSaving] = useState(false)
   const [scope, animate] = useAnimate()
 
-  const cats = useMemo(() => categoriesFor(kind, settings.family), [kind, settings.family])
+  const cats = useMemo(() => categoriesFor(kind, settings.family, goals), [kind, settings.family, goals])
+  const [repeat, setRepeat] = useState<Cadence | null>(null)
   const lastUsed = (k: Kind) => entries.find((e) => e.kind === k)?.category
 
   const chooseKind = (k: Kind) => {
     setKind(k)
-    const options = categoriesFor(k, settings.family)
+    const options = categoriesFor(k, settings.family, goals)
     const prev = lastUsed(k)
     setCategory(options.some((c) => c.label === prev) ? prev! : options[0]?.label ?? 'Other')
     setStep('amount')
@@ -89,7 +91,10 @@ function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDon
     setSaving(true)
     const input = { kind, amount: minor, category: category || 'Other', note: note.trim(), date }
     if (editing) await update(editing.id, input)
-    else await add(input)
+    else {
+      await add(input)
+      if (repeat) await addRecurring({ kind, amount: minor, category: input.category, note: input.note, cadence: repeat }, date)
+    }
     onDone()
   }
 
@@ -147,7 +152,7 @@ function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDon
                       layout
                       onClick={() => {
                         setKind(k)
-                        const opts = categoriesFor(k, settings.family)
+                        const opts = categoriesFor(k, settings.family, goals)
                         if (!opts.some((c) => c.label === category)) setCategory(lastUsed(k) ?? opts[0]?.label ?? 'Other')
                       }}
                       className="flex h-9 items-center gap-1 rounded-full px-2.5 text-[13px] font-extrabold whitespace-nowrap"
@@ -224,14 +229,30 @@ function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDon
             </AnimatePresence>
 
             {/* date + note */}
-            <div className="flex gap-2 px-5 pt-3">
+            <div className="flex flex-wrap gap-2 px-5 pt-3">
               <DateChip value={date} onChange={setDate} />
               {!noteOpen && (
                 <button onClick={() => setNoteOpen(true)} className="flex h-10 items-center gap-1.5 rounded-xl bg-white px-3 text-[15px] font-bold text-ink/70 shadow-[0_0_0_2px_var(--color-line)_inset]">
                   <PencilLine size={16} strokeWidth={2.5} /> Note
                 </button>
               )}
+              {!editing && (
+                <button
+                  onClick={() => setRepeat((r) => (r === null ? 'month' : r === 'month' ? 'week' : null))}
+                  className="flex h-10 items-center gap-1.5 rounded-xl px-3 text-[15px] font-bold"
+                  style={repeat ? { background: 'var(--color-ink)', color: '#fff' } : { background: '#fff', color: 'rgba(38,35,46,.7)', boxShadow: '0 0 0 2px var(--color-line) inset' }}
+                >
+                  <Repeat2 size={16} strokeWidth={2.5} /> {repeat === 'month' ? 'Monthly' : repeat === 'week' ? 'Weekly' : 'Repeat'}
+                </button>
+              )}
             </div>
+            <AnimatePresence initial={false}>
+              {repeat && (
+                <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="px-6 pt-2 text-[13px] font-bold text-ink/55">
+                  🔁 {cadenceLabel({ cadence: repeat, anchor: anchorFor(repeat, date) })} — Penny will ask you to confirm it each time.
+                </motion.p>
+              )}
+            </AnimatePresence>
             <AnimatePresence>
               {noteOpen && (
                 <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="px-5 pt-2">

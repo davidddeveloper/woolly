@@ -19,7 +19,7 @@ const BRAND = ['#34C17B', '#F5A524', '#3BA7FF', '#8B5CF6', '#FF5FA2']
 export function Celebration() {
   const { celebration, dismissCelebration, settings } = useStore()
   const overBudget = celebration?.budget?.crossed === 'over'
-  const big = !!celebration && (celebration.firstToday || celebration.badges.length > 0 || !!celebration.levelUp || overBudget)
+  const big = !!celebration && (celebration.firstToday || celebration.badges.length > 0 || !!celebration.levelUp || !!celebration.goal || overBudget)
 
   useEffect(() => {
     if (!celebration) return
@@ -27,7 +27,7 @@ export function Celebration() {
     const k = celebration.kind
     const colors = k === 'checkin' || k === 'budget' ? BRAND : [BUCKETS[k].color, '#FFFFFF', '#FFD24A']
     // Going over budget is news, not a party.
-    if (overBudget && !celebration.badges.length && !celebration.levelUp) return
+    if (overBudget && !celebration.badges.length && !celebration.levelUp && !celebration.goal) return
     if (big) {
       const fire = (x: number, angle: number) =>
         confetti({ particleCount: 70, spread: 70, startVelocity: 55, angle, origin: { x, y: 0.75 }, colors, scalar: 1.1, disableForReducedMotion: true })
@@ -134,7 +134,7 @@ function BigParty({ c, outfit, currency, onClose }: { c: C; outfit: string; curr
   const [shownStreak, setShownStreak] = useState(c.firstToday ? Math.max(0, c.streak - 1) : c.streak)
   const line = useMemo(() => (c.kind === 'checkin' && !c.line ? 'A quiet day still counts. Proud of you!' : defaultLine(c)), [c])
   // Over budget with nothing else to celebrate: a calm heads-up instead of a party.
-  const alertOnly = c.budget?.crossed === 'over' && !c.firstToday && !c.badges.length && !c.levelUp
+  const alertOnly = c.budget?.crossed === 'over' && !c.firstToday && !c.badges.length && !c.levelUp && !c.goal
   const unlocked = c.levelUp ? OUTFITS.find((o) => o.level === c.levelUp!.level) : undefined
 
   useEffect(() => {
@@ -194,14 +194,25 @@ function BigParty({ c, outfit, currency, onClose }: { c: C; outfit: string; curr
         animate={{ y: 0, opacity: 1 }}
         transition={{ ...spring, delay: 0.3 }}
       >
-        {c.levelUp ? `Level ${c.levelUp.level}!` : alertOnly ? `${c.budget!.label} went over budget` : line}
+        {c.goal ? `You reached ${c.goal.name}! ${c.goal.emoji}` : c.levelUp ? `Level ${c.levelUp.level}!` : alertOnly ? `${c.budget!.label} went over budget` : line}
       </motion.h2>
       {alertOnly && (
         <motion.p className="mt-2 max-w-[320px] text-center text-[17px] font-bold text-ink/60" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }}>
           {overBy(c.budget!, currency)} No panic — knowing is the first step. Let's go gentle on it for the rest of the {periodNoun(c.budget!.status.budget.period)}.
         </motion.p>
       )}
-      {c.levelUp && (
+      {c.goal && (
+        <motion.p className="mt-1 max-w-[320px] text-center text-[17px] font-bold text-ink/60" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }}>
+          Goal complete. Every little saving added up — that's the whole trick.
+          {c.levelUp && (
+            <>
+              <br />
+              And you're now Level {c.levelUp.level}: <b className="text-ink">{c.levelUp.title}</b>
+            </>
+          )}
+        </motion.p>
+      )}
+      {c.levelUp && !c.goal && (
         <motion.p className="mt-1 text-center text-[17px] font-bold text-ink/60" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.45 }}>
           You're now a <b className="text-ink">{c.levelUp.title}</b>
           {unlocked && unlocked.id !== 'none' && (

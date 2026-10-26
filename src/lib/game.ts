@@ -103,6 +103,7 @@ export interface BadgeCtx {
   count: Record<Kind, number>
   months: Map<string, Totals>
   closes: BudgetClose[]
+  goalsReached: number
 }
 
 export interface Badge {
@@ -132,11 +133,12 @@ export const BADGES: Badge[] = [
   },
   { id: 'fence', name: 'Inside the Fence', emoji: '🌿', how: 'Finish a budget period without going over', test: (c) => c.closes.some((x) => x.spent <= x.limit_amount) },
   { id: 'leftovers', name: 'Leftover Lamb', emoji: '🧺', how: 'Sweep budget leftovers into savings 3 times', test: (c) => c.closes.filter((x) => x.outcome === 'saved').length >= 3 },
+  { id: 'goal', name: 'Goal Getter', emoji: '🎯', how: 'Reach a savings goal', test: (c) => c.goalsReached >= 1 },
   { id: 'fifty', name: 'Fifty Hoofprints', emoji: '⭐', how: 'Log 50 entries', test: (c) => c.entries.length >= 50 },
   { id: 'century', name: 'Century Shepherd', emoji: '💯', how: 'Log 100 entries', test: (c) => c.entries.length >= 100 },
 ]
 
-export function earnedBadges(entries: Entry[], checkins: string[], longest: number, closes: BudgetClose[] = []) {
+export function earnedBadges(entries: Entry[], checkins: string[], longest: number, closes: BudgetClose[] = [], goalsReached = 0) {
   const count = { income: 0, expense: 0, saving: 0, investment: 0, buffer: 0 } as Record<Kind, number>
   const months = new Map<string, Totals>()
   for (const e of entries) {
@@ -146,7 +148,7 @@ export function earnedBadges(entries: Entry[], checkins: string[], longest: numb
     t[e.kind] += e.amount
     months.set(m, t)
   }
-  const ctx: BadgeCtx = { entries, longest, checkins, count, months, closes }
+  const ctx: BadgeCtx = { entries, longest, checkins, count, months, closes, goalsReached }
   return BADGES.filter((b) => b.test(ctx)).map((b) => b.id)
 }
 

@@ -3,6 +3,8 @@ import type { Kind } from '../lib/buckets'
 import { DEFAULT_FAMILY } from '../lib/buckets'
 import { dayKey, uid } from '../lib/format'
 import type { Budget, BudgetClose, BudgetInput } from '../lib/budgets'
+import type { Goal, GoalInput } from '../lib/goals'
+import type { Recurring } from '../lib/recurring'
 
 export interface Entry {
   id: string
@@ -122,6 +124,54 @@ export async function closeBudget(c: Omit<BudgetClose, 'created_at'>) {
     'INSERT OR REPLACE INTO budget_closes (budget_id, period_start, limit_amount, spent, outcome, amount, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
     [c.budget_id, c.period_start, c.limit_amount, c.spent, c.outcome, c.amount, new Date().toISOString()],
   )
+}
+
+export function loadRecurring(): Recurring[] {
+  return all<Recurring>('SELECT * FROM recurring ORDER BY next_date, created_at')
+}
+
+export async function addRecurring(r: Omit<Recurring, 'id' | 'created_at'>) {
+  await run('INSERT INTO recurring (id, kind, amount, category, note, cadence, anchor, next_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+    uid(), r.kind, r.amount, r.category, r.note, r.cadence, r.anchor, r.next_date, new Date().toISOString(),
+  ])
+}
+
+export async function setRecurringNext(id: string, next: string) {
+  await run('UPDATE recurring SET next_date = ? WHERE id = ?', [next, id])
+}
+
+export async function deleteRecurring(id: string) {
+  await run('DELETE FROM recurring WHERE id = ?', [id])
+}
+
+export function loadGoals(): Goal[] {
+  return all<Goal>('SELECT * FROM goals ORDER BY reached_at IS NOT NULL, created_at')
+}
+
+/** Renaming a goal carries its saving entries along, since they're linked by category. */
+export async function saveGoal(g: GoalInput, prev?: Goal) {
+  if (!prev) {
+    await run('INSERT INTO goals (id, name, emoji, target, deadline, created_at) VALUES (?, ?, ?, ?, ?, ?)', [
+      uid(), g.name, g.emoji, g.target, g.deadline, new Date().toISOString(),
+    ])
+    return
+  }
+  await runMany([
+    ['UPDATE goals SET name = ?, emoji = ?, target = ?, deadline = ? WHERE id = ?', [g.name, g.emoji, g.target, g.deadline, prev.id]],
+    ["UPDATE entries SET category = ? WHERE kind = 'saving' AND category = ?", [g.name, prev.name]],
+  ])
+}
+
+export async function setGoalReached(id: string, at: string | null) {
+  await run('UPDATE goals SET reached_at = ? WHERE id = ?', [at, id])
+}
+
+/** The money stays saved; its entries just fall back to the generic "Goal" category. */
+export async function deleteGoal(g: Goal) {
+  await runMany([
+    ["UPDATE entries SET category = 'Goal' WHERE kind = 'saving' AND category = ?", [g.name]],
+    ['DELETE FROM goals WHERE id = ?', [g.id]],
+  ])
 }
 
 export async function unlockBadges(ids: string[]) {

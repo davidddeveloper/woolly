@@ -6,6 +6,8 @@ import { activeDays, BADGES, earnedBadges, levelInfo, streakInfo, XP, type Badge
 import type { Kind } from './lib/buckets'
 import { budgetEmoji, budgetLabel, budgetStatus, counts, crossed, pendingReviews, type Budget, type BudgetClose, type BudgetInput, type BudgetStatus, type Crossed } from './lib/budgets'
 import { dayKey } from './lib/format'
+import { goalSaved, type Goal, type GoalInput } from './lib/goals'
+import { anchorFor, isDue, nextOccurrence, type Recurring, type RecurringInput } from './lib/recurring'
 
 /** How a fresh log moved a budget it counts toward. */
 export interface BudgetPing {
@@ -28,6 +30,8 @@ export interface Celebration {
   badges: Badge[]
   levelUp: { level: number; title: string } | null
   budget: BudgetPing | null
+  /** A savings goal this write completed. */
+  goal?: Pick<Goal, 'name' | 'emoji'> | null
 }
 
 interface Store {
@@ -39,6 +43,10 @@ interface Store {
   closes: BudgetClose[]
   /** Budget periods that ended and haven't been reviewed yet. */
   reviews: BudgetStatus[]
+  recurring: Recurring[]
+  /** Recurring entries whose date has come, oldest first. */
+  due: Recurring[]
+  goals: Goal[]
   settings: Settings
   days: Set<string>
   streak: ReturnType<typeof streakInfo>
@@ -53,7 +61,14 @@ interface Store {
   checkIn: () => Promise<void>
   saveBudget: (b: BudgetInput, id?: string) => Promise<void>
   deleteBudget: (id: string) => Promise<void>
-  resolveReview: (s: BudgetStatus, outcome: ReviewOutcome) => Promise<void>
+  /** `into` is the saving category leftovers go to (a goal name, or Leftovers). */
+  resolveReview: (s: BudgetStatus, outcome: ReviewOutcome, into?: string) => Promise<void>
+  addRecurring: (r: RecurringInput, from: string) => Promise<void>
+  confirmRecurring: (r: Recurring, amount?: number) => Promise<void>
+  skipRecurring: (r: Recurring) => Promise<void>
+  deleteRecurring: (id: string) => Promise<void>
+  saveGoal: (g: GoalInput, prev?: Goal) => Promise<void>
+  deleteGoal: (g: Goal) => Promise<void>
   saveSettings: (patch: Partial<Settings>) => Promise<void>
   reload: () => void
 }
@@ -79,6 +94,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [badges, setBadges] = useState<Record<string, string>>({})
   const [budgets, setBudgets] = useState<Budget[]>([])
   const [closes, setCloses] = useState<BudgetClose[]>([])
+  const [recurring, setRecurring] = useState<Recurring[]>([])
+  const [goals, setGoals] = useState<Goal[]>([])
   const [settings, setSettings] = useState<Settings>(repo.DEFAULT_SETTINGS)
   const [celebration, setCelebration] = useState<Celebration | null>(null)
 
@@ -88,6 +105,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setBadges(repo.loadBadges())
     setBudgets(repo.loadBudgets())
     setCloses(repo.loadCloses())
+    setRecurring(repo.loadRecurring())
+    setGoals(repo.loadGoals())
     setSettings(repo.loadSettings())
   }, [])
 
@@ -104,6 +123,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const level = levelInfo(xp)
   const today = dayKey()
   const reviews = useMemo(() => pendingReviews(budgets, entries, closes, today), [budgets, entries, closes, today])
+  const due = useMemo(() => recurring.filter((r) => isDue(r, today)), [recurring, today])
 
   /** The most newsworthy budget this entry counts toward. */
   const budgetPing = useCallback(
@@ -129,8 +149,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const nextCheckins = repo.loadCheckins()
       const nextDays = activeDays(nextEntries, nextCheckins)
       const nextStreak = streakInfo(nextDays)
+      const now = new Date().toISOString()
+      const reached = repo.loadGoals().filter((g) => !g.reached_at && goalSaved(g, nextEntries) >= g.target)
+      for (const g of reached) await repo.setGoalReached(g.id, now)
+      const goalsReached = repo.loadGoals().filter((g) => g.reached_at).length
       const owned = repo.loadBadges()
-      const fresh = earnedBadges(nextEntries, nextCheckins, nextStreak.longest, repo.loadCloses()).filter((id) => !owned[id])
+      const fresh = earnedBadges(nextEntries, nextCheckins, nextStreak.longest, repo.loadCloses(), goalsReached).filter((id) => !owned[id])
       await repo.unlockBadges(fresh)
       reload()
       if (!kind) return
@@ -141,6 +165,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         id: Date.now(),
         kind,
         ...extra,
+        goal: reached[0] ? { name: reached[0].name, emoji: reached[0].emoji } : null,
         xp: (kind === 'checkin' || kind === 'budget' ? 0 : XP.entry) + (firstToday ? XP.activeDay : 0) + fresh.length * XP.badge,
         firstToday,
         streak: nextStreak.current,
@@ -159,6 +184,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     budgets,
     closes,
     reviews,
+    recurring,
+    due,
+    goals,
     settings,
     days,
     streak,
@@ -196,15 +224,45 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       await repo.deleteBudget(id)
       reload()
     },
-    resolveReview: async (s, outcome) => {
+    resolveReview: async (s, outcome, into = 'Leftovers') => {
       const leftover = Math.max(0, s.remaining)
       const amount = outcome === 'saved' || outcome === 'rollover' ? leftover : 0
       await repo.closeBudget({ budget_id: s.budget.id, period_start: s.range.start, limit_amount: s.limit, spent: s.spent, outcome, amount })
       if (outcome === 'saved' && leftover > 0) {
-        const e = { kind: 'saving' as const, amount: leftover, category: 'Leftovers', note: `${budgetLabel(s.budget)} budget leftover`, date: dayKey() }
+        const e = { kind: 'saving' as const, amount: leftover, category: into, note: `${budgetLabel(s.budget)} budget leftover`, date: dayKey() }
         await repo.addEntry(e)
-        await afterWrite('saving', { budget: null, line: 'Leftovers swept into the vault 🧺' })
+        await afterWrite('saving', { budget: null, line: into === 'Leftovers' ? REVIEW_LINES.saved : `Leftovers dropped into ${into} 🎯` })
       } else await afterWrite(outcome === 'dismissed' ? null : 'budget', { budget: null, line: REVIEW_LINES[outcome] })
+    },
+    addRecurring: async (r, from) => {
+      const anchor = anchorFor(r.cadence, from)
+      await repo.addRecurring({ ...r, anchor, next_date: nextOccurrence(r.cadence, anchor, from) })
+      reload()
+    },
+    confirmRecurring: async (r, amount = r.amount) => {
+      // Advance first so a quick double tap can't log the same occurrence twice.
+      await repo.setRecurringNext(r.id, nextOccurrence(r.cadence, r.anchor, r.next_date))
+      const e = { kind: r.kind, amount, category: r.category, note: r.note, date: r.next_date }
+      const row = await repo.addEntry(e)
+      await afterWrite(r.kind, { budget: budgetPing(e, entries, [row, ...entries]) })
+    },
+    skipRecurring: async (r) => {
+      await repo.setRecurringNext(r.id, nextOccurrence(r.cadence, r.anchor, r.next_date))
+      reload()
+    },
+    deleteRecurring: async (id) => {
+      await repo.deleteRecurring(id)
+      reload()
+    },
+    saveGoal: async (g, prev) => {
+      await repo.saveGoal(g, prev)
+      // A raised target can un-reach a goal; a lowered one is picked up on the next save.
+      if (prev?.reached_at && goalSaved(g, repo.loadEntries()) < g.target) await repo.setGoalReached(prev.id, null)
+      reload()
+    },
+    deleteGoal: async (g) => {
+      await repo.deleteGoal(g)
+      reload()
     },
     saveSettings: async (patch) => {
       await repo.saveSettings(patch)
