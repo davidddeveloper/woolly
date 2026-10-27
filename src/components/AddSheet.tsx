@@ -15,24 +15,33 @@ interface Props {
   open: boolean
   onClose: () => void
   editing?: Entry | null
+  /** Open straight on a kind (and optionally an amount, in minor units), skipping the picker. */
+  start?: { kind: Kind; amount?: number } | null
   onDeleted?: (e: Entry) => void
 }
 
-export function AddSheet({ open, onClose, editing, onDeleted }: Props) {
+export function AddSheet({ open, onClose, editing, start, onDeleted }: Props) {
   return (
     <Sheet open={open} onClose={onClose} tall>
-      {open && <AddFlow key={editing?.id ?? 'new'} editing={editing} onDone={onClose} onDeleted={onDeleted} />}
+      {open && <AddFlow key={editing?.id ?? `new-${start?.kind ?? ''}`} editing={editing} start={start} onDone={onClose} onDeleted={onDeleted} />}
     </Sheet>
   )
 }
 
-function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDone: () => void; onDeleted?: (e: Entry) => void }) {
+function AddFlow({ editing, start, onDone, onDeleted }: { editing?: Entry | null; start?: Props['start']; onDone: () => void; onDeleted?: (e: Entry) => void }) {
   const { settings, entries, budgets, closes, goals, add, update, remove, addRecurring } = useStore()
   const cur = settings.currency
-  const [step, setStep] = useState<'kind' | 'amount'>(editing ? 'amount' : 'kind')
-  const [kind, setKind] = useState<Kind>(editing?.kind ?? 'expense')
-  const [amount, setAmount] = useState(editing ? trimZeros(toMajor(editing.amount, cur).toFixed(decimalsFor(cur))) : '')
-  const [category, setCategory] = useState(editing?.category ?? '')
+  const lastUsed = (k: Kind) => entries.find((e) => e.kind === k)?.category
+  const defaultCategory = (k: Kind) => {
+    const options = categoriesFor(k, settings.family, goals)
+    const prev = lastUsed(k)
+    return options.some((c) => c.label === prev) ? prev! : options[0]?.label ?? 'Other'
+  }
+  const [step, setStep] = useState<'kind' | 'amount'>(editing || start ? 'amount' : 'kind')
+  const [kind, setKind] = useState<Kind>(editing?.kind ?? start?.kind ?? 'expense')
+  const startMinor = editing?.amount ?? start?.amount
+  const [amount, setAmount] = useState(startMinor ? trimZeros(toMajor(startMinor, cur).toFixed(decimalsFor(cur))) : '')
+  const [category, setCategory] = useState(() => editing?.category ?? (start ? defaultCategory(start.kind) : ''))
   const [note, setNote] = useState(editing?.note ?? '')
   const [date, setDate] = useState(editing?.date ?? dayKey())
   const [saving, setSaving] = useState(false)
@@ -40,14 +49,19 @@ function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDon
 
   const cats = useMemo(() => categoriesFor(kind, settings.family, goals), [kind, settings.family, goals])
   const [repeat, setRepeat] = useState<Cadence | null>(null)
-  const lastUsed = (k: Kind) => entries.find((e) => e.kind === k)?.category
 
   const chooseKind = (k: Kind) => {
     setKind(k)
-    const options = categoriesFor(k, settings.family, goals)
-    const prev = lastUsed(k)
-    setCategory(options.some((c) => c.label === prev) ? prev! : options[0]?.label ?? 'Other')
+    setCategory(defaultCategory(k))
     setStep('amount')
+  }
+
+  /** Switch kind mid-entry, keeping the category if it still fits. */
+  const switchKind = (k: Kind) => {
+    setKind(k)
+    if (k === 'withdrawal') setRepeat(null)
+    const opts = categoriesFor(k, settings.family, goals)
+    if (!opts.some((c) => c.label === category)) setCategory(defaultCategory(k))
   }
 
   useEffect(() => {
@@ -145,18 +159,16 @@ function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDon
               )}
               <div className="no-scrollbar flex flex-1 justify-center gap-1.5 overflow-x-auto">
                 {KINDS.map((k) => {
-                  const on = k === kind
+                  // A withdrawal lives under Saving.
+                  const on = k === kind || (k === 'saving' && kind === 'withdrawal')
+                  const tone = BUCKETS[on ? kind : k]
                   return (
                     <motion.button
                       key={k}
                       layout
-                      onClick={() => {
-                        setKind(k)
-                        const opts = categoriesFor(k, settings.family, goals)
-                        if (!opts.some((c) => c.label === category)) setCategory(lastUsed(k) ?? opts[0]?.label ?? 'Other')
-                      }}
+                      onClick={() => switchKind(k)}
                       className="flex h-9 items-center gap-1 rounded-full px-2.5 text-[13px] font-extrabold whitespace-nowrap"
-                      style={{ background: on ? BUCKETS[k].color : BUCKETS[k].soft, color: on ? '#fff' : BUCKETS[k].deep }}
+                      style={{ background: on ? tone.color : tone.soft, color: on ? '#fff' : tone.deep }}
                       transition={spring}
                     >
                       <span>{BUCKETS[k].emoji}</span>
@@ -176,9 +188,13 @@ function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDon
 
             {/* amount */}
             <div className="amount flex flex-col items-center px-5 pt-5 pb-3">
-              <span className="text-[13px] font-extrabold tracking-[0.12em] uppercase" style={{ color: b.deep }}>
-                {b.verb}
-              </span>
+              {kind === 'saving' || kind === 'withdrawal' ? (
+                <SavingToggle kind={kind} onChange={switchKind} />
+              ) : (
+                <span className="text-[13px] font-extrabold tracking-[0.12em] uppercase" style={{ color: b.deep }}>
+                  {b.verb}
+                </span>
+              )}
               <div className="num flex items-baseline font-black" style={{ color: amount ? b.deep : 'rgba(38,35,46,.25)' }}>
                 <span className="mr-1 text-[30px]">{currencySymbol(cur)}</span>
                 <span className="text-[56px] leading-[1.1]">
@@ -231,7 +247,7 @@ function AddFlow({ editing, onDone, onDeleted }: { editing?: Entry | null; onDon
             {/* date + note */}
             <div className="flex flex-wrap gap-2 px-5 pt-3">
               <DateChip value={date} onChange={setDate} />
-              {!editing && (
+              {!editing && kind !== 'withdrawal' && (
                 <button
                   onClick={() => setRepeat((r) => (r === null ? 'month' : r === 'month' ? 'week' : null))}
                   className="flex h-10 items-center gap-1.5 rounded-xl px-3 text-[15px] font-bold"
@@ -505,5 +521,27 @@ function NoteField({
         )}
       </AnimatePresence>
     </motion.div>
+  )
+}
+
+/** Put money into savings, or log taking some back out. */
+function SavingToggle({ kind, onChange }: { kind: 'saving' | 'withdrawal'; onChange: (k: Kind) => void }) {
+  return (
+    <div className="mb-1 flex rounded-full bg-ink/[.06] p-1">
+      {(['saving', 'withdrawal'] as const).map((k) => {
+        const on = k === kind
+        return (
+          <button
+            key={k}
+            onClick={() => onChange(k)}
+            className="relative h-8 rounded-full px-3.5 text-[13px] font-extrabold tracking-wide uppercase"
+            style={{ color: on ? '#fff' : 'rgba(38,35,46,.5)' }}
+          >
+            {on && <motion.span layoutId="saving-toggle" className="absolute inset-0 rounded-full" style={{ background: BUCKETS[k].color }} transition={spring} />}
+            <span className="relative">{k === 'saving' ? '🐷 Put in' : '🔓 Take out'}</span>
+          </button>
+        )
+      })}
+    </div>
   )
 }

@@ -4,7 +4,7 @@ import { addDays, dayKey, monthKey } from './format'
 import type { BudgetClose } from './budgets'
 
 export type Totals = Record<Kind, number>
-export const emptyTotals = (): Totals => ({ income: 0, expense: 0, saving: 0, investment: 0, buffer: 0 })
+export const emptyTotals = (): Totals => ({ income: 0, expense: 0, saving: 0, investment: 0, buffer: 0, withdrawal: 0 })
 
 export function totalsFor(entries: Entry[], predicate: (e: Entry) => boolean = () => true): Totals {
   const t = emptyTotals()
@@ -104,6 +104,8 @@ export interface BadgeCtx {
   months: Map<string, Totals>
   closes: BudgetClose[]
   goalsReached: number
+  /** Longest run of months the saving promise was kept. */
+  promiseStreak: number
 }
 
 export interface Badge {
@@ -133,13 +135,20 @@ export const BADGES: Badge[] = [
   },
   { id: 'fence', name: 'Inside the Fence', emoji: '🌿', how: 'Finish a budget period without going over', test: (c) => c.closes.some((x) => x.spent <= x.limit_amount) },
   { id: 'leftovers', name: 'Leftover Lamb', emoji: '🧺', how: 'Sweep budget leftovers into savings 3 times', test: (c) => c.closes.filter((x) => x.outcome === 'saved').length >= 3 },
+  { id: 'promise', name: 'Promise Keeper', emoji: '🤝', how: 'Keep your monthly saving promise 3 months in a row', test: (c) => c.promiseStreak >= 3 },
   { id: 'goal', name: 'Goal Getter', emoji: '🎯', how: 'Reach a savings goal', test: (c) => c.goalsReached >= 1 },
   { id: 'fifty', name: 'Fifty Hoofprints', emoji: '⭐', how: 'Log 50 entries', test: (c) => c.entries.length >= 50 },
   { id: 'century', name: 'Century Shepherd', emoji: '💯', how: 'Log 100 entries', test: (c) => c.entries.length >= 100 },
 ]
 
-export function earnedBadges(entries: Entry[], checkins: string[], longest: number, closes: BudgetClose[] = [], goalsReached = 0) {
-  const count = { income: 0, expense: 0, saving: 0, investment: 0, buffer: 0 } as Record<Kind, number>
+export function earnedBadges(
+  entries: Entry[],
+  checkins: string[],
+  longest: number,
+  extra: { closes?: BudgetClose[]; goalsReached?: number; promiseStreak?: number } = {},
+) {
+  const { closes = [], goalsReached = 0, promiseStreak = 0 } = extra
+  const count = emptyTotals()
   const months = new Map<string, Totals>()
   for (const e of entries) {
     count[e.kind]++
@@ -148,7 +157,7 @@ export function earnedBadges(entries: Entry[], checkins: string[], longest: numb
     t[e.kind] += e.amount
     months.set(m, t)
   }
-  const ctx: BadgeCtx = { entries, longest, checkins, count, months, closes, goalsReached }
+  const ctx: BadgeCtx = { entries, longest, checkins, count, months, closes, goalsReached, promiseStreak }
   return BADGES.filter((b) => b.test(ctx)).map((b) => b.id)
 }
 
@@ -212,6 +221,7 @@ export const SAVE_LINES: Record<Kind, string[]> = {
   saving: ['Into the wool vault! 🐷', 'Pay yourself first — nailed it.', 'Your safety blanket just got thicker.'],
   investment: ['Seeds planted 🌱', 'Money that makes money. Smart!', 'Future you is doing a happy dance.'],
   buffer: ['Generosity looks good on you 💝', 'Your family is lucky to have you.', 'A full heart is real wealth.'],
+  withdrawal: ['Noted — that’s what savings are for 🛟', 'Taken out and tracked. Awareness, not guilt.', 'Logged. We’ll refill the vault together 🐑'],
 }
 
 export function saveLine(kind: Kind) {

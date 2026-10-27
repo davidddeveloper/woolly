@@ -65,6 +65,23 @@ const MIGRATIONS: string[] = [
   );
   `,
   `ALTER TABLE budgets ADD COLUMN note TEXT NOT NULL DEFAULT '';`,
+  // Withdrawals from savings. SQLite can't alter a CHECK constraint, so rebuild the table.
+  `
+  CREATE TABLE entries_next (
+    id          TEXT PRIMARY KEY,
+    kind        TEXT NOT NULL CHECK (kind IN ('income','expense','saving','investment','buffer','withdrawal')),
+    amount      INTEGER NOT NULL CHECK (amount > 0),
+    category    TEXT NOT NULL,
+    note        TEXT NOT NULL DEFAULT '',
+    date        TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+  );
+  INSERT INTO entries_next (id, kind, amount, category, note, date, created_at)
+    SELECT id, kind, amount, category, note, date, created_at FROM entries;
+  DROP TABLE entries;
+  ALTER TABLE entries_next RENAME TO entries;
+  CREATE INDEX idx_entries_date ON entries (date);
+  `,
 ]
 
 let db: Database | null = null

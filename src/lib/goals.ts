@@ -16,10 +16,15 @@ export type GoalInput = Pick<Goal, 'name' | 'emoji' | 'target' | 'deadline'>
 
 export const GOAL_EMOJI = ['🎯', '💻', '📱', '🏍️', '🚗', '✈️', '🏠', '🎓', '💍', '👶', '🛟', '🎸']
 
+/** Put in minus taken out. */
 export function goalSaved(g: Pick<Goal, 'name'>, entries: Entry[]) {
   let s = 0
-  for (const e of entries) if (e.kind === 'saving' && e.category === g.name) s += e.amount
-  return s
+  for (const e of entries) {
+    if (e.category !== g.name) continue
+    if (e.kind === 'saving') s += e.amount
+    else if (e.kind === 'withdrawal') s -= e.amount
+  }
+  return Math.max(0, s)
 }
 
 export interface GoalStatus {

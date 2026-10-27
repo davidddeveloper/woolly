@@ -8,6 +8,7 @@ import { budgetEmoji, budgetLabel, budgetStatus, counts, crossed, pendingReviews
 import { dayKey } from './lib/format'
 import { goalSaved, type Goal, type GoalInput } from './lib/goals'
 import { anchorFor, isDue, nextOccurrence, type Recurring, type RecurringInput } from './lib/recurring'
+import { bestPromiseRun, promiseMonths } from './lib/savings'
 
 /** How a fresh log moved a budget it counts toward. */
 export interface BudgetPing {
@@ -154,7 +155,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       for (const g of reached) await repo.setGoalReached(g.id, now)
       const goalsReached = repo.loadGoals().filter((g) => g.reached_at).length
       const owned = repo.loadBadges()
-      const fresh = earnedBadges(nextEntries, nextCheckins, nextStreak.longest, repo.loadCloses(), goalsReached).filter((id) => !owned[id])
+      const plan = repo.loadSettings().savingsPlan
+      const promiseStreak = plan ? bestPromiseRun(promiseMonths(nextEntries, plan, dayKey(), 36)) : 0
+      const fresh = earnedBadges(nextEntries, nextCheckins, nextStreak.longest, { closes: repo.loadCloses(), goalsReached, promiseStreak }).filter((id) => !owned[id])
       await repo.unlockBadges(fresh)
       reload()
       if (!kind) return

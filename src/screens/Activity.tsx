@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { Search, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { BUCKETS, KINDS, type Kind } from '../lib/buckets'
+import { ALL_KINDS, BUCKETS, type Kind } from '../lib/buckets'
 import { friendlyDay, money } from '../lib/format'
 import { EntryRow } from '../components/Nav'
 import { Penny } from '../components/Penny'
@@ -56,7 +56,7 @@ export function Activity({ onEdit, onAdd }: { onEdit: (e: Entry) => void; onAdd:
           </AnimatePresence>
         </div>
         <div className="no-scrollbar -mx-4 mt-2 flex gap-2 overflow-x-auto px-4">
-          {(['all', ...KINDS] as const).map((k) => {
+          {(['all', ...ALL_KINDS] as const).map((k) => {
             const on = filter === k
             const b = k === 'all' ? null : BUCKETS[k]
             return (

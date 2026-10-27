@@ -1,4 +1,4 @@
-export type Kind = 'income' | 'expense' | 'saving' | 'investment' | 'buffer'
+export type Kind = 'income' | 'expense' | 'saving' | 'investment' | 'buffer' | 'withdrawal'
 
 export interface Category {
   id: string
@@ -82,9 +82,23 @@ export const BUCKETS: Record<Kind, Bucket> = {
     deep: '#D93A7E',
     categories: [], // built from the person's family list in settings
   },
+  // Not a bucket of its own: money taken back out of savings. Reached from the Saving flow.
+  withdrawal: {
+    kind: 'withdrawal',
+    label: 'Withdrawal',
+    verb: 'Took out',
+    blurb: 'Money taken back out of savings',
+    emoji: '🔓',
+    color: '#14B8A6',
+    soft: '#DDF7F3',
+    deep: '#0E8C7E',
+    categories: [c('Emergency', '🚨'), c('Bills', '🧾'), c('Family', '💛'), c('Big purchase', '🛍️'), c('Opportunity', '✨'), c('Other', '❓')],
+  },
 }
 
+/** The five buckets you pick from. Withdrawals sit under Saving. */
 export const KINDS: Kind[] = ['income', 'expense', 'saving', 'investment', 'buffer']
+export const ALL_KINDS: Kind[] = [...KINDS, 'withdrawal']
 export const OUT_KINDS: Kind[] = ['expense', 'saving', 'investment', 'buffer']
 
 export const DEFAULT_FAMILY = ['Mum', 'Dad', 'Siblings', 'Kids', 'Relatives', 'Friends', 'Charity']
@@ -102,12 +116,17 @@ export function categoriesFor(kind: Kind, family: string[], goals: GoalCategory[
     const own = goals.filter((g) => !g.reached_at).map((g) => c(g.name, g.emoji))
     return [...own, ...BUCKETS.saving.categories.filter((x) => !own.some((g) => g.label === x.label))]
   }
+  // Taking money from a goal (reached or not) lowers it, so goals come first.
+  if (kind === 'withdrawal') {
+    const own = goals.map((g) => c(g.name, g.emoji))
+    return [...own, ...BUCKETS.withdrawal.categories.filter((x) => !own.some((g) => g.label === x.label))]
+  }
   if (kind !== 'buffer') return BUCKETS[kind].categories
   return [...family.map((name) => c(name, FAMILY_EMOJI[name.toLowerCase()] ?? '💛')), c('Other', '✨')]
 }
 
 export function categoryEmoji(kind: Kind, label: string, family: string[], goals: GoalCategory[] = []) {
-  if (kind === 'saving') {
+  if (kind === 'saving' || kind === 'withdrawal') {
     const g = goals.find((x) => x.name === label)
     if (g) return g.emoji
   }

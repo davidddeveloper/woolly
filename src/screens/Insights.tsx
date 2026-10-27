@@ -6,6 +6,7 @@ import { addDays, addMonths, dayKey, money, monthKey, monthLabel, parseDay } fro
 import { monthTotals, totalsFor } from '../lib/game'
 import { Card, CountUp, SectionTitle, spring } from '../components/ui'
 import { budgetEmoji, budgetLabel, budgetStatus, periodRange, STATE_COLOR, type BudgetStatus } from '../lib/budgets'
+import { vaultBalance } from '../lib/savings'
 import { useStore } from '../store'
 
 export function Insights() {
@@ -17,6 +18,7 @@ export function Insights() {
   const t = useMemo(() => monthTotals(entries, month), [entries, month])
   const out = OUT_KINDS.reduce((s, k) => s + t[k], 0)
   const life = useMemo(() => totalsFor(entries), [entries])
+  const vault = useMemo(() => vaultBalance(entries, settings.savingsStart), [entries, settings.savingsStart])
 
   const go = (n: number) => {
     setDir(n)
@@ -160,9 +162,9 @@ export function Insights() {
             >
               <span className="text-[26px]">{BUCKETS[k].emoji}</span>
               <span className="text-[13px] font-extrabold" style={{ color: BUCKETS[k].deep }}>
-                {BUCKETS[k].verb}
+                {k === 'saving' ? 'In savings' : BUCKETS[k].verb}
               </span>
-              <span className="num text-[15px] font-black">{money(life[k], cur, { compact: true })}</span>
+              <span className="num text-[15px] font-black">{money(k === 'saving' ? vault : life[k], cur, { compact: true })}</span>
             </motion.div>
           ))}
         </div>

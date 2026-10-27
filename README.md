@@ -33,6 +33,7 @@ Schema: `src/db/sqlite.ts` (append to `MIGRATIONS` to change it).
 - `src/components/Budgets.tsx`: Meadow budgets card, budget editor, period wrap-up (save / treat / roll over)
 - `src/lib/goals.ts` + `src/components/Goals.tsx`: savings goals (a goal's name is the saving category it collects)
 - `src/lib/recurring.ts` + `src/components/Recurring.tsx`: repeating entries, confirmed with one tap when due
+- `src/lib/savings.ts` + `src/components/Vault.tsx`: savings balance (starting balance + saved − taken out), the monthly saving promise
 - `src/components/Penny.tsx`: mascot (blink, idle, jump, mood effects) · `Outfits.tsx`: the wardrobe
 - `src/components/AddSheet.tsx`: logging flow · `Celebration.tsx`: reward moments
 - `src/screens/*`: Meadow (home), Activity, Insights, Barn, Onboarding

@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { Check, ChevronRight, Flame, Star } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { BUCKETS, OUT_KINDS } from '../lib/buckets'
+import { BUCKETS, OUT_KINDS, type Kind } from '../lib/buckets'
 import { dayKey, greeting, money, monthKey, monthLabel, parseDay, partOfDay } from '../lib/format'
 import { monthTotals, pennyLine, pennyMood, weekDots } from '../lib/game'
 import { Penny } from '../components/Penny'
@@ -10,6 +10,8 @@ import { EntryRow } from '../components/Nav'
 import { BudgetsCard } from '../components/Budgets'
 import { GoalsCard } from '../components/Goals'
 import { DueCard } from '../components/Recurring'
+import { VaultCard } from '../components/Vault'
+import { daysLeftInMonth, promiseMonths } from '../lib/savings'
 import { budgetLabel, budgetStatus, periodNoun, type Budget, type BudgetStatus } from '../lib/budgets'
 import type { Goal } from '../lib/goals'
 import { Card, Chunky, CountUp, Ring, SectionTitle, spring } from '../components/ui'
@@ -23,6 +25,8 @@ export function Home({
   onBarn,
   onBudget,
   onGoal,
+  onVault,
+  onLog,
 }: {
   onAdd: () => void
   onEdit: (e: Entry) => void
@@ -30,16 +34,16 @@ export function Home({
   onBarn: () => void
   onBudget: (b: Budget | null) => void
   onGoal: (g: Goal | null) => void
+  onVault: () => void
+  onLog: (kind: Kind, amount?: number) => void
 }) {
   const { entries, settings, streak, level, days, checkIn, celebration, goals, budgets, closes } = useStore()
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 100))
   const mood = pennyMood(streak)
   const stretched = useMemo(() => mostStretched(budgets.map((b) => budgetStatus(b, entries, closes))), [budgets, entries, closes])
-  // Every other tap, Penny mentions the budget that needs care (never while she's asleep).
-  const line =
-    stretched && mood !== 'sleepy' && seed % 2 === 0
-      ? budgetLine(stretched, settings.name, settings.currency)
-      : pennyLine(mood, settings.name, streak.current, seed)
+  const nudge = stretched ? budgetLine(stretched, settings.name, settings.currency) : promiseNudge(entries, settings.savingsPlan, settings.currency)
+  // Every other tap, Penny mentions what needs care (never while she's asleep).
+  const line = nudge && mood !== 'sleepy' && seed % 2 === 0 ? nudge : pennyLine(mood, settings.name, streak.current, seed)
   const month = monthKey(dayKey())
   const t = useMemo(() => monthTotals(entries, month), [entries, month])
   const cur = settings.currency
@@ -102,6 +106,8 @@ export function Home({
         <QuestCard logged={streak.loggedToday} streak={streak.current} days={days} onAdd={onAdd} onCheckIn={checkIn} />
 
         <BudgetsCard onEdit={onBudget} />
+
+        <VaultCard onSettings={onVault} onLog={onLog} />
 
         <GoalsCard onEdit={onGoal} />
 
@@ -202,6 +208,15 @@ function mostStretched(rows: BudgetStatus[]) {
   return worst && worst.state !== 'ok' ? worst : null
 }
 
+/** Late in the month with the saving promise not yet kept. */
+function promiseNudge(entries: Entry[], plan: ReturnType<typeof useStore>['settings']['savingsPlan'], currency: string) {
+  if (!plan) return null
+  const now = promiseMonths(entries, plan).at(-1)
+  const days = daysLeftInMonth()
+  if (!now || now.saved >= plan.amount || days > 10) return null
+  return `${money(plan.amount - now.saved, currency)} to go on this month's saving promise — ${days} day${days === 1 ? '' : 's'} left 🐷`
+}
+
 function budgetLine(s: BudgetStatus, name: string, currency: string) {
   const label = budgetLabel(s.budget)
   if (s.state === 'over') return `${label} hopped the fence this ${periodNoun(s.budget.period)}. Let's tiptoe till it resets 🐾`
@@ -289,7 +304,8 @@ function FlowBar({ totals }: { totals: ReturnType<typeof monthTotals> }) {
 }
 
 function Unallocated({ totals, currency }: { totals: ReturnType<typeof monthTotals>; currency: string }) {
-  const left = totals.income - OUT_KINDS.reduce((s, k) => s + totals[k], 0)
+  // Money taken back out of savings is spendable again.
+  const left = totals.income + totals.withdrawal - OUT_KINDS.reduce((s, k) => s + totals[k], 0)
   if (!totals.income && !left) return null
   const over = left < 0
   return (

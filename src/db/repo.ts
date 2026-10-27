@@ -24,6 +24,10 @@ export interface Settings {
   /** Monthly targets as % of income. */
   targets: { saving: number; investment: number; buffer: number }
   outfit: string
+  /** Savings already in the bank, as of `at` (ISO time it was set). */
+  savingsStart: { amount: number; at: string } | null
+  /** A fixed amount to save every month, tracked from `since` (YYYY-MM). */
+  savingsPlan: { amount: number; since: string } | null
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -33,6 +37,8 @@ export const DEFAULT_SETTINGS: Settings = {
   family: DEFAULT_FAMILY,
   targets: { saving: 10, investment: 10, buffer: 5 },
   outfit: 'none',
+  savingsStart: null,
+  savingsPlan: null,
 }
 
 export function loadEntries(): Entry[] {
@@ -161,7 +167,7 @@ export async function saveGoal(g: GoalInput, prev?: Goal) {
   }
   await runMany([
     ['UPDATE goals SET name = ?, emoji = ?, target = ?, deadline = ? WHERE id = ?', [g.name, g.emoji, g.target, g.deadline, prev.id]],
-    ["UPDATE entries SET category = ? WHERE kind = 'saving' AND category = ?", [g.name, prev.name]],
+    ["UPDATE entries SET category = ? WHERE kind IN ('saving', 'withdrawal') AND category = ?", [g.name, prev.name]],
   ])
 }
 
@@ -173,6 +179,7 @@ export async function setGoalReached(id: string, at: string | null) {
 export async function deleteGoal(g: Goal) {
   await runMany([
     ["UPDATE entries SET category = 'Goal' WHERE kind = 'saving' AND category = ?", [g.name]],
+    ["UPDATE entries SET category = 'Other' WHERE kind = 'withdrawal' AND category = ?", [g.name]],
     ['DELETE FROM goals WHERE id = ?', [g.id]],
   ])
 }
