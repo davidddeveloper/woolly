@@ -10,7 +10,7 @@ export function vaultBalance(entries: Entry[], start: Settings['savingsStart']) 
   for (const e of entries) {
     if (start && e.created_at <= start.at) continue
     if (e.kind === 'saving') s += e.amount
-    else if (e.kind === 'withdrawal') s -= e.amount
+    else if (e.kind === 'withdrawal' || e.source === 'savings') s -= e.amount
   }
   return s
 }
@@ -24,7 +24,7 @@ export interface PromiseMonth {
   state: PromiseState
 }
 
-/** Month by month: did you save what you promised? Deposits count; withdrawals are shown beside them. */
+/** Month by month: did you save what you promised? Deposits count; money taken out is shown beside them. */
 export function promiseMonths(entries: Entry[], plan: NonNullable<Settings['savingsPlan']>, today = dayKey(), count = 6): PromiseMonth[] {
   const now = monthKey(today)
   const first = [addMonths(now, -(count - 1)), plan.since].sort()[1]
@@ -35,7 +35,7 @@ export function promiseMonths(entries: Entry[], plan: NonNullable<Settings['savi
     for (const e of entries) {
       if (monthKey(e.date) !== m) continue
       if (e.kind === 'saving') saved += e.amount
-      else if (e.kind === 'withdrawal') tapped += e.amount
+      else if (e.kind === 'withdrawal' || e.source === 'savings') tapped += e.amount
     }
     const state: PromiseState = saved >= plan.amount ? 'kept' : m === now ? 'open' : saved > 0 ? 'partial' : 'missed'
     out.push({ month: m, saved, tapped, state })

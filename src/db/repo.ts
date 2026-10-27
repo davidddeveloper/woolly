@@ -5,6 +5,7 @@ import { dayKey, uid } from '../lib/format'
 import type { Budget, BudgetClose, BudgetInput } from '../lib/budgets'
 import type { Goal, GoalInput } from '../lib/goals'
 import type { Recurring } from '../lib/recurring'
+import type { MonthClose, Source } from '../lib/month'
 
 export interface Entry {
   id: string
@@ -14,6 +15,8 @@ export interface Entry {
   note: string
   date: string
   created_at: string
+  /** Where the money came from; only 'month' comes out of this month's money. */
+  source: Source
 }
 
 export interface Settings {
@@ -28,6 +31,8 @@ export interface Settings {
   savingsStart: { amount: number; at: string } | null
   /** A fixed amount to save every month, tracked from `since` (YYYY-MM). */
   savingsPlan: { amount: number; since: string } | null
+  /** First month (YYYY-MM) whose leftover rolls forward. */
+  carrySince: string | null
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -39,10 +44,11 @@ export const DEFAULT_SETTINGS: Settings = {
   outfit: 'none',
   savingsStart: null,
   savingsPlan: null,
+  carrySince: null,
 }
 
 export function loadEntries(): Entry[] {
-  return all<Entry>('SELECT id, kind, amount, category, note, date, created_at FROM entries ORDER BY date DESC, created_at DESC')
+  return all<Entry>('SELECT id, kind, amount, category, note, date, created_at, source FROM entries ORDER BY date DESC, created_at DESC')
 }
 
 export function loadCheckins(): string[] {
@@ -75,19 +81,19 @@ export async function saveSettings(patch: Partial<Settings>) {
   )
 }
 
-export type EntryInput = Pick<Entry, 'kind' | 'amount' | 'category' | 'note' | 'date'>
+export type EntryInput = Pick<Entry, 'kind' | 'amount' | 'category' | 'note' | 'date'> & { source?: Source }
 
 export async function addEntry(e: EntryInput): Promise<Entry> {
-  const row: Entry = { ...e, id: uid(), created_at: new Date().toISOString() }
-  await run('INSERT INTO entries (id, kind, amount, category, note, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [
-    row.id, row.kind, row.amount, row.category, row.note, row.date, row.created_at,
+  const row: Entry = { ...e, source: e.source ?? 'month', id: uid(), created_at: new Date().toISOString() }
+  await run('INSERT INTO entries (id, kind, amount, category, note, date, created_at, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [
+    row.id, row.kind, row.amount, row.category, row.note, row.date, row.created_at, row.source,
   ])
   return row
 }
 
 export async function updateEntry(id: string, e: EntryInput) {
-  await run('UPDATE entries SET kind = ?, amount = ?, category = ?, note = ?, date = ? WHERE id = ?', [
-    e.kind, e.amount, e.category, e.note, e.date, id,
+  await run('UPDATE entries SET kind = ?, amount = ?, category = ?, note = ?, date = ?, source = ? WHERE id = ?', [
+    e.kind, e.amount, e.category, e.note, e.date, e.source ?? 'month', id,
   ])
 }
 
@@ -96,8 +102,18 @@ export async function deleteEntry(id: string) {
 }
 
 export async function restoreEntry(e: Entry) {
-  await run('INSERT OR REPLACE INTO entries (id, kind, amount, category, note, date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [
-    e.id, e.kind, e.amount, e.category, e.note, e.date, e.created_at,
+  await run('INSERT OR REPLACE INTO entries (id, kind, amount, category, note, date, created_at, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [
+    e.id, e.kind, e.amount, e.category, e.note, e.date, e.created_at, e.source ?? 'month',
+  ])
+}
+
+export function loadMonthCloses(): MonthClose[] {
+  return all<MonthClose>('SELECT * FROM month_closes ORDER BY month')
+}
+
+export async function closeMonth(c: Omit<MonthClose, 'created_at'>) {
+  await run('INSERT OR REPLACE INTO month_closes (month, leftover, saved, treat, created_at) VALUES (?, ?, ?, ?, ?)', [
+    c.month, c.leftover, c.saved, c.treat, new Date().toISOString(),
   ])
 }
 

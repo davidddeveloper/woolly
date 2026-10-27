@@ -27,6 +27,8 @@
   color-scheme: light;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* The floating nav tucks into the home-indicator area instead of sitting on top of it. */
+  --nav-gap: max(10px, calc(var(--safe-bottom) - 14px));
 }
 
 html,
@@ -110,5 +112,5 @@ button {
   padding-top: calc(var(--safe-top) + 12px);
 }
 .pb-nav {
-  padding-bottom: calc(var(--safe-bottom) + 112px);
+  padding-bottom: calc(var(--nav-gap) + 62px + 28px);
 }

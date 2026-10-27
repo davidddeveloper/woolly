@@ -5,8 +5,9 @@ import { Penny } from '../components/Penny'
 import { Outfit } from '../components/Outfits'
 import { RepeatingCard } from '../components/Recurring'
 import { Card, SectionTitle, spring } from '../components/ui'
-import { exportFile, importFile, wipe } from '../db/sqlite'
-import { CURRENCIES, dayKey } from '../lib/format'
+import { importFile, wipe } from '../db/sqlite'
+import { shareBackup } from '../lib/backup'
+import { CURRENCIES } from '../lib/format'
 import { BADGES, LEVELS, OUTFITS, pennyMood, xpForLevel } from '../lib/game'
 import { BUCKETS } from '../lib/buckets'
 import { useStore } from '../store'
@@ -25,19 +26,7 @@ export function Barn({ toast }: { toast: (t: string) => void }) {
     setJump((j) => j + 1)
   }
 
-  const backup = async () => {
-    const bytes = exportFile()
-    const file = new File([bytes], `woolly-${dayKey()}.sqlite`, { type: 'application/vnd.sqlite3' })
-    if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: 'Woolly backup' }).catch(() => {})
-    } else {
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(file)
-      a.download = file.name
-      a.click()
-      URL.revokeObjectURL(a.href)
-    }
-  }
+  const backup = shareBackup
 
   const restore = async (f: File | undefined) => {
     if (!f) return

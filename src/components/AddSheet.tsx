@@ -7,6 +7,7 @@ import { XP } from '../lib/game'
 import { budgetLabel, budgetStatus, counts, periodNoun, STATE_COLOR } from '../lib/budgets'
 import { anchorFor, cadenceLabel, type Cadence } from '../lib/recurring'
 import { parseBreakdown } from '../lib/notes'
+import { SOURCES, sourcesFor, type Source } from '../lib/month'
 import type { Entry } from '../db/repo'
 import { useStore } from '../store'
 import { Chunky, Sheet, spring } from './ui'
@@ -16,7 +17,7 @@ interface Props {
   onClose: () => void
   editing?: Entry | null
   /** Open straight on a kind (and optionally an amount, in minor units), skipping the picker. */
-  start?: { kind: Kind; amount?: number } | null
+  start?: { kind: Kind; amount?: number; source?: Source } | null
   onDeleted?: (e: Entry) => void
 }
 
@@ -29,7 +30,7 @@ export function AddSheet({ open, onClose, editing, start, onDeleted }: Props) {
 }
 
 function AddFlow({ editing, start, onDone, onDeleted }: { editing?: Entry | null; start?: Props['start']; onDone: () => void; onDeleted?: (e: Entry) => void }) {
-  const { settings, entries, budgets, closes, goals, add, update, remove, addRecurring } = useStore()
+  const { settings, entries, budgets, closes, goals, treat, add, update, remove, addRecurring } = useStore()
   const cur = settings.currency
   const lastUsed = (k: Kind) => entries.find((e) => e.kind === k)?.category
   const defaultCategory = (k: Kind) => {
@@ -41,9 +42,12 @@ function AddFlow({ editing, start, onDone, onDeleted }: { editing?: Entry | null
   const [kind, setKind] = useState<Kind>(editing?.kind ?? start?.kind ?? 'expense')
   const startMinor = editing?.amount ?? start?.amount
   const [amount, setAmount] = useState(startMinor ? trimZeros(toMajor(startMinor, cur).toFixed(decimalsFor(cur))) : '')
-  const [category, setCategory] = useState(() => editing?.category ?? (start ? defaultCategory(start.kind) : ''))
+  const [category, setCategory] = useState(() => editing?.category ?? (start?.source === 'treat' ? 'Fun' : start ? defaultCategory(start.kind) : ''))
   const [note, setNote] = useState(editing?.note ?? '')
   const [date, setDate] = useState(editing?.date ?? dayKey())
+  const [source, setSource] = useState<Source>(editing?.source ?? start?.source ?? 'month')
+  // Editing a treat entry must keep Treat on offer even if the pot is now empty.
+  const sources = sourcesFor(kind, editing?.source === 'treat' ? Math.max(treat, 1) : treat)
   const [saving, setSaving] = useState(false)
   const [scope, animate] = useAnimate()
 
@@ -59,6 +63,7 @@ function AddFlow({ editing, start, onDone, onDeleted }: { editing?: Entry | null
   /** Switch kind mid-entry, keeping the category if it still fits. */
   const switchKind = (k: Kind) => {
     setKind(k)
+    if (!sourcesFor(k, treat).includes(source)) setSource('month')
     if (k === 'withdrawal') setRepeat(null)
     const opts = categoriesFor(k, settings.family, goals)
     if (!opts.some((c) => c.label === category)) setCategory(defaultCategory(k))
@@ -95,15 +100,15 @@ function AddFlow({ editing, start, onDone, onDeleted }: { editing?: Entry | null
 
   // The budget this entry would count toward (a category budget beats a whole-bucket one).
   const plan = useMemo(() => {
-    const draft = { kind, category, date } as Entry
+    const draft = { kind, category, date, source } as Entry
     const b = budgets.filter((x) => counts(x, draft)).sort((a, z) => Number(!!z.category) - Number(!!a.category))[0]
     return b && budgetStatus(b, editing ? entries.filter((e) => e.id !== editing.id) : entries, closes, date)
-  }, [budgets, closes, entries, editing, kind, category, date])
+  }, [budgets, closes, entries, editing, kind, category, date, source])
 
   const save = async () => {
     if (minor <= 0 || saving) return shake()
     setSaving(true)
-    const input = { kind, amount: minor, category: category || 'Other', note: note.trim(), date }
+    const input = { kind, amount: minor, category: category || 'Other', note: note.trim(), date, source: sources.includes(source) ? source : ('month' as const) }
     if (editing) await update(editing.id, input)
     else {
       await add(input)
@@ -244,7 +249,7 @@ function AddFlow({ editing, start, onDone, onDeleted }: { editing?: Entry | null
               {plan && <BudgetHint key={plan.budget.id} s={plan} adding={minor} currency={cur} />}
             </AnimatePresence>
 
-            {/* date + note */}
+            {/* date + where the money came from + note */}
             <div className="flex flex-wrap gap-2 px-5 pt-3">
               <DateChip value={date} onChange={setDate} />
               {!editing && kind !== 'withdrawal' && (
@@ -256,6 +261,7 @@ function AddFlow({ editing, start, onDone, onDeleted }: { editing?: Entry | null
                   <Repeat2 size={16} strokeWidth={2.5} /> {repeat === 'month' ? 'Monthly' : repeat === 'week' ? 'Weekly' : 'Repeat'}
                 </button>
               )}
+              {sources.length > 0 && <SourcePicker value={source} options={sources} onChange={setSource} treat={treat} currency={cur} />}
             </div>
             <AnimatePresence initial={false}>
               {repeat && (
@@ -543,5 +549,56 @@ function SavingToggle({ kind, onChange }: { kind: 'saving' | 'withdrawal'; onCha
         )
       })}
     </div>
+  )
+}
+
+/**
+ * Where the money came from. Most of the time it's this month's money, so the choice stays
+ * folded into one quiet chip until it's needed.
+ */
+function SourcePicker({ value, options, onChange, treat, currency }: { value: Source; options: Source[]; onChange: (s: Source) => void; treat: number; currency: string }) {
+  const [open, setOpen] = useState(false)
+  const on = value !== 'month'
+  return (
+    <>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex h-10 items-center gap-1.5 rounded-xl px-3 text-[15px] font-bold"
+        style={on ? { background: 'var(--color-ink)', color: '#fff' } : { background: '#fff', color: 'rgba(38,35,46,.7)', boxShadow: '0 0 0 2px var(--color-line) inset' }}
+      >
+        <span>{SOURCES[value].emoji}</span> {on ? SOURCES[value].short : 'Paid from…'}
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="w-full overflow-hidden"
+          >
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              {options.map((s) => {
+                const sel = s === value
+                return (
+                  <button
+                    key={s}
+                    onClick={() => (onChange(s), setOpen(false))}
+                    className="flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-left text-[14px] leading-tight font-extrabold"
+                    style={sel ? { background: 'var(--color-ink)', color: '#fff' } : { background: '#fff', color: 'rgba(38,35,46,.75)', boxShadow: '0 0 0 2px var(--color-line) inset' }}
+                  >
+                    <span className="text-[18px]">{SOURCES[s].emoji}</span>
+                    <span className="flex flex-col">
+                      {SOURCES[s].label}
+                      {s === 'treat' && <span className="num text-[12px] opacity-60">{money(treat, currency)} left</span>}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {on && !open && <p className="w-full px-1 text-[13px] leading-snug font-bold text-ink/50">{SOURCES[value].hint}</p>}
+    </>
   )
 }

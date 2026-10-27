@@ -5,10 +5,11 @@ import type { Entry, EntryInput, Settings } from './db/repo'
 import { activeDays, BADGES, earnedBadges, levelInfo, streakInfo, XP, type Badge } from './lib/game'
 import type { Kind } from './lib/buckets'
 import { budgetEmoji, budgetLabel, budgetStatus, counts, crossed, pendingReviews, type Budget, type BudgetClose, type BudgetInput, type BudgetStatus, type Crossed } from './lib/budgets'
-import { dayKey } from './lib/format'
+import { dayKey, money, monthEnd, monthKey, monthName, addMonths } from './lib/format'
 import { goalSaved, type Goal, type GoalInput } from './lib/goals'
 import { anchorFor, isDue, nextOccurrence, type Recurring, type RecurringInput } from './lib/recurring'
 import { bestPromiseRun, promiseMonths } from './lib/savings'
+import { monthMoney, pendingClose, treatLeft, type MonthClose, type MonthMoney } from './lib/month'
 
 /** How a fresh log moved a budget it counts toward. */
 export interface BudgetPing {
@@ -48,6 +49,13 @@ interface Store {
   /** Recurring entries whose date has come, oldest first. */
   due: Recurring[]
   goals: Goal[]
+  monthCloses: MonthClose[]
+  /** This month's money, with last month's leftover carried in. */
+  money: MonthMoney
+  /** Treat money set aside and not yet spent. */
+  treat: number
+  /** Last month, waiting to be wrapped up. */
+  close: { month: string; leftover: number } | null
   settings: Settings
   days: Set<string>
   streak: ReturnType<typeof streakInfo>
@@ -70,6 +78,8 @@ interface Store {
   deleteRecurring: (id: string) => Promise<void>
   saveGoal: (g: GoalInput, prev?: Goal) => Promise<void>
   deleteGoal: (g: Goal) => Promise<void>
+  /** Wrap up a month: save some, keep some to enjoy, carry the rest. */
+  closeMonth: (c: { month: string; leftover: number; saved: number; treat: number; into: string }) => Promise<void>
   saveSettings: (patch: Partial<Settings>) => Promise<void>
   reload: () => void
 }
@@ -97,6 +107,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [closes, setCloses] = useState<BudgetClose[]>([])
   const [recurring, setRecurring] = useState<Recurring[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
+  const [monthCloses, setMonthCloses] = useState<MonthClose[]>([])
   const [settings, setSettings] = useState<Settings>(repo.DEFAULT_SETTINGS)
   const [celebration, setCelebration] = useState<Celebration | null>(null)
 
@@ -108,11 +119,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setCloses(repo.loadCloses())
     setRecurring(repo.loadRecurring())
     setGoals(repo.loadGoals())
+    setMonthCloses(repo.loadMonthCloses())
     setSettings(repo.loadSettings())
   }, [])
 
   useEffect(() => {
-    openDb().then(() => {
+    openDb().then(async () => {
+      // Leftovers start rolling forward from the month this was first opened, never retroactively.
+      if (!repo.loadSettings().carrySince) await repo.saveSettings({ carrySince: monthKey(dayKey()) })
       reload()
       setReady(true)
     })
@@ -125,6 +139,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const today = dayKey()
   const reviews = useMemo(() => pendingReviews(budgets, entries, closes, today), [budgets, entries, closes, today])
   const due = useMemo(() => recurring.filter((r) => isDue(r, today)), [recurring, today])
+  const thisMonth = useMemo(
+    () => monthMoney(entries, closes, monthCloses, settings.carrySince, monthKey(today)),
+    [entries, closes, monthCloses, settings.carrySince, today],
+  )
+  const treat = useMemo(() => treatLeft(entries, closes, monthCloses), [entries, closes, monthCloses])
+  const close = useMemo(() => pendingClose(entries, closes, monthCloses, settings.carrySince, today), [entries, closes, monthCloses, settings.carrySince, today])
 
   /** The most newsworthy budget this entry counts toward. */
   const budgetPing = useCallback(
@@ -190,6 +210,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     recurring,
     due,
     goals,
+    monthCloses,
+    money: thisMonth,
+    treat,
+    close,
     settings,
     days,
     streak,
@@ -199,7 +223,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dismissCelebration: () => setCelebration(null),
     add: async (e) => {
       const row = await repo.addEntry(e)
-      await afterWrite(e.kind, { budget: budgetPing(e, entries, [row, ...entries]) })
+      if (e.source === 'treat') await afterWrite(e.kind, { budget: null, line: 'Enjoy it — you earned this 🍦' })
+      else await afterWrite(e.kind, { budget: budgetPing(e, entries, [row, ...entries]) })
     },
     update: async (id, e) => {
       await repo.updateEntry(id, e)
@@ -229,13 +254,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     resolveReview: async (s, outcome, into = 'Leftovers') => {
       const leftover = Math.max(0, s.remaining)
-      const amount = outcome === 'saved' || outcome === 'rollover' ? leftover : 0
+      const amount = outcome === 'saved' || outcome === 'rollover' || outcome === 'treat' ? leftover : 0
       await repo.closeBudget({ budget_id: s.budget.id, period_start: s.range.start, limit_amount: s.limit, spent: s.spent, outcome, amount })
       if (outcome === 'saved' && leftover > 0) {
         const e = { kind: 'saving' as const, amount: leftover, category: into, note: `${budgetLabel(s.budget)} budget leftover`, date: dayKey() }
         await repo.addEntry(e)
         await afterWrite('saving', { budget: null, line: into === 'Leftovers' ? REVIEW_LINES.saved : `Leftovers dropped into ${into} 🎯` })
-      } else await afterWrite(outcome === 'dismissed' ? null : 'budget', { budget: null, line: REVIEW_LINES[outcome] })
+      } else
+        await afterWrite(outcome === 'dismissed' ? null : 'budget', {
+          budget: null,
+          line: outcome === 'treat' && leftover > 0 ? `${money(leftover, settings.currency)} of treat money — go enjoy it 🍦` : REVIEW_LINES[outcome],
+        })
+    },
+    closeMonth: async ({ month, leftover, saved, treat, into }) => {
+      const cur = settings.currency
+      // Saved leftovers belong to the month they came from, so they count toward its promise.
+      if (saved > 0) await repo.addEntry({ kind: 'saving', amount: saved, category: into, note: `${monthName(month)} leftover`, date: monthEnd(month) })
+      await repo.closeMonth({ month, leftover, saved, treat })
+      const kept = leftover - saved - treat
+      const next = monthName(addMonths(month, 1))
+      const line =
+        treat > 0
+          ? `${money(treat, cur)} to enjoy, guilt-free 🍦${kept > 0 ? ` ${money(kept, cur)} carried into ${next}.` : ''}`
+          : saved > 0
+            ? `${money(saved, cur)} into ${into === 'Leftovers' ? 'the vault' : into} 🐷${kept > 0 ? ` ${money(kept, cur)} carried into ${next}.` : ''}`
+            : `${money(kept, cur)} carried into ${next} 🌾`
+      await afterWrite(saved > 0 ? 'saving' : 'budget', { budget: null, line })
     },
     addRecurring: async (r, from) => {
       const anchor = anchorFor(r.cadence, from)

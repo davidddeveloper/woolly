@@ -87,6 +87,18 @@ export function monthLabel(month: string, style: 'long' | 'short' = 'long') {
   return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: style, year: style === 'long' ? 'numeric' : undefined })
 }
 
+/** "October" — just the month's name. */
+export function monthName(month: string) {
+  const [y, m] = month.split('-').map(Number)
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long' })
+}
+
+/** Last day of a month, as a day key. */
+export function monthEnd(month: string) {
+  const [y, m] = month.split('-').map(Number)
+  return dayKey(new Date(y, m, 0))
+}
+
 export function friendlyDay(key: string) {
   const today = dayKey()
   if (key === today) return 'Today'

@@ -74,7 +74,9 @@ export function budgetEmoji(b: Pick<Budget, 'kind' | 'category'>, family: string
 
 export const periodNoun = (p: Period) => (p === 'week' ? 'week' : 'month')
 
-export const counts = (b: Pick<Budget, 'kind' | 'category'>, e: Entry) => e.kind === b.kind && (!b.category || e.category === b.category)
+// Treat money was set aside to enjoy, so spending it never eats into a budget.
+export const counts = (b: Pick<Budget, 'kind' | 'category'>, e: Entry) =>
+  e.kind === b.kind && e.source !== 'treat' && (!b.category || e.category === b.category)
 
 export function spentIn(b: Budget, entries: Entry[], r: Range) {
   let s = 0

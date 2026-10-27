@@ -4,6 +4,7 @@ import { AddSheet } from './components/AddSheet'
 import { BudgetSheet, ReviewSheet } from './components/Budgets'
 import { GoalSheet } from './components/Goals'
 import { VaultSheet } from './components/Vault'
+import { MonthCloseSheet } from './components/MonthClose'
 import { Celebration } from './components/Celebration'
 import { BottomNav, type Tab } from './components/Nav'
 import { Penny } from './components/Penny'
@@ -12,6 +13,9 @@ import type { Entry } from './db/repo'
 import type { Budget } from './lib/budgets'
 import type { Goal } from './lib/goals'
 import type { Kind } from './lib/buckets'
+import type { Source } from './lib/month'
+
+type Start = { kind: Kind; amount?: number; source?: Source }
 import { Activity } from './screens/Activity'
 import { Barn } from './screens/Barn'
 import { Home } from './screens/Home'
@@ -22,16 +26,17 @@ import { useStore } from './store'
 const ORDER: Tab[] = ['home', 'activity', 'insights', 'barn']
 
 export default function App() {
-  const { ready, settings, streak, restore, reviews, celebration } = useStore()
+  const { ready, settings, streak, restore, reviews, close, celebration } = useStore()
   const [tab, setTab] = useState<Tab>('home')
   const [dir, setDir] = useState(0)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState<Entry | null>(null)
-  const [startWith, setStartWith] = useState<{ kind: Kind; amount?: number } | null>(null)
+  const [startWith, setStartWith] = useState<Start | null>(null)
   const [vaultOpen, setVaultOpen] = useState(false)
   const [budget, setBudget] = useState<{ open: boolean; value: Budget | null }>({ open: false, value: null })
   const [goal, setGoal] = useState<{ open: boolean; value: Goal | null }>({ open: false, value: null })
   const [reviewHidden, setReviewHidden] = useState(false)
+  const [closeHidden, setCloseHidden] = useState(false)
   const toast = useToast()
   const scroller = useRef<HTMLDivElement>(null)
 
@@ -53,7 +58,7 @@ export default function App() {
     setAdding(true)
   }
   /** Open the log sheet, optionally already on a kind (and amount). */
-  const openAdd = (start: { kind: Kind; amount?: number } | null = null) => {
+  const openAdd = (start: Start | null = null) => {
     setEditing(null)
     setStartWith(start)
     setAdding(true)
@@ -79,7 +84,7 @@ export default function App() {
               onBudget={(b) => setBudget({ open: true, value: b })}
               onGoal={(g) => setGoal({ open: true, value: g })}
               onVault={() => setVaultOpen(true)}
-              onLog={(kind, amount) => openAdd({ kind, amount })}
+              onLog={(kind, amount, source) => openAdd({ kind, amount, source })}
             />
           )}
           {tab === 'activity' && <Activity onEdit={openEdit} onAdd={() => openAdd()} />}
@@ -101,9 +106,10 @@ export default function App() {
       <BudgetSheet open={budget.open} budget={budget.value} onClose={() => setBudget((b) => ({ ...b, open: false }))} />
       <VaultSheet open={vaultOpen} onClose={() => setVaultOpen(false)} />
       <GoalSheet open={goal.open} goal={goal.value} onClose={() => setGoal((g) => ({ ...g, open: false }))} />
-      {/* Wrap up ended budget periods on the Meadow, one at a time, when nothing else is on screen. */}
+      {/* On the Meadow, when nothing else is on screen: wrap up last month first, then ended budget periods one at a time. */}
+      <MonthCloseSheet open={tab === 'home' && !closeHidden && !adding && !budget.open && !goal.open && !vaultOpen && !celebration} onClose={() => setCloseHidden(true)} />
       <ReviewSheet
-        open={tab === 'home' && !reviewHidden && !adding && !budget.open && !goal.open && !vaultOpen && !celebration}
+        open={tab === 'home' && (!close || closeHidden) && !reviewHidden && !adding && !budget.open && !goal.open && !vaultOpen && !celebration}
         review={reviews[0]}
         onClose={() => setReviewHidden(true)}
       />

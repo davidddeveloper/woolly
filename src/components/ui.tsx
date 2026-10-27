@@ -142,7 +142,7 @@ export function useToast() {
         <motion.div
           key={toast.id}
           className="fixed inset-x-4 z-[60] mx-auto flex max-w-[440px] items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-white shadow-[var(--shadow-float)]"
-          style={{ bottom: 'calc(var(--safe-bottom) + 104px)' }}
+          style={{ bottom: 'calc(var(--nav-gap) + 104px)' }}
           initial={{ y: 40, opacity: 0, scale: 0.95 }}
           animate={{ y: 0, opacity: 1, scale: 1 }}
           exit={{ y: 20, opacity: 0 }}

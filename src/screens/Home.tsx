@@ -1,8 +1,8 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { Check, ChevronRight, Flame, Star } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Flame, Star } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { BUCKETS, OUT_KINDS, type Kind } from '../lib/buckets'
-import { dayKey, greeting, money, monthKey, monthLabel, parseDay, partOfDay } from '../lib/format'
+import { addMonths, dayKey, greeting, money, monthKey, monthLabel, monthName, parseDay, partOfDay } from '../lib/format'
 import { monthTotals, pennyLine, pennyMood, weekDots } from '../lib/game'
 import { Penny } from '../components/Penny'
 import { Meadow } from '../components/Meadow'
@@ -12,6 +12,7 @@ import { GoalsCard } from '../components/Goals'
 import { DueCard } from '../components/Recurring'
 import { VaultCard } from '../components/Vault'
 import { daysLeftInMonth, promiseMonths } from '../lib/savings'
+import { safeToSpend, upcomingThisMonth, type MonthMoney, type Source } from '../lib/month'
 import { budgetLabel, budgetStatus, periodNoun, type Budget, type BudgetStatus } from '../lib/budgets'
 import type { Goal } from '../lib/goals'
 import { Card, Chunky, CountUp, Ring, SectionTitle, spring } from '../components/ui'
@@ -35,13 +36,16 @@ export function Home({
   onBudget: (b: Budget | null) => void
   onGoal: (g: Goal | null) => void
   onVault: () => void
-  onLog: (kind: Kind, amount?: number) => void
+  onLog: (kind: Kind, amount?: number, source?: Source) => void
 }) {
-  const { entries, settings, streak, level, days, checkIn, celebration, goals, budgets, closes } = useStore()
+  const { entries, settings, streak, level, days, checkIn, celebration, goals, budgets, closes, money: mm, treat } = useStore()
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 100))
   const mood = pennyMood(streak)
   const stretched = useMemo(() => mostStretched(budgets.map((b) => budgetStatus(b, entries, closes))), [budgets, entries, closes])
-  const nudge = stretched ? budgetLine(stretched, settings.name, settings.currency) : promiseNudge(entries, settings.savingsPlan, settings.currency)
+  const nudge = stretched
+    ? budgetLine(stretched, settings.name, settings.currency)
+    : (promiseNudge(entries, settings.savingsPlan, settings.currency) ??
+      (treat > 0 ? `${money(treat, settings.currency)} of treat money is waiting. Go do something nice 🍦` : null))
   // Every other tap, Penny mentions what needs care (never while she's asleep).
   const line = nudge && mood !== 'sleepy' && seed % 2 === 0 ? nudge : pennyLine(mood, settings.name, streak.current, seed)
   const month = monthKey(dayKey())
@@ -101,6 +105,8 @@ export function Home({
       </Meadow>
 
       <div className="relative -mt-6 flex flex-col gap-4 rounded-t-[32px] bg-cream px-4 pt-5">
+        <TodayCard onSpendTreat={() => onLog('expense', undefined, 'treat')} />
+
         <DueCard />
 
         <QuestCard logged={streak.loggedToday} streak={streak.current} days={days} onAdd={onAdd} onCheckIn={checkIn} />
@@ -118,7 +124,7 @@ export function Home({
             <span className="text-[20px]">🌾</span>
           </div>
           <CountUp value={t.income} currency={cur} className="mt-1 block text-[34px] leading-tight font-black" />
-          <FlowBar totals={t} />
+          <FlowBar totals={t} carried={mm.carried} />
           <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
             {OUT_KINDS.map((k) => (
               <div key={k} className="flex items-center gap-2">
@@ -130,7 +136,7 @@ export function Home({
               </div>
             ))}
           </div>
-          <Unallocated totals={t} currency={cur} />
+          <Unallocated totals={t} mm={mm} currency={cur} />
         </Card>
 
         {/* goals */}
@@ -282,9 +288,9 @@ function QuestCard({ logged, streak, days, onAdd, onCheckIn }: { logged: boolean
   )
 }
 
-function FlowBar({ totals }: { totals: ReturnType<typeof monthTotals> }) {
+function FlowBar({ totals, carried }: { totals: ReturnType<typeof monthTotals>; carried: number }) {
   const out = OUT_KINDS.reduce((s, k) => s + totals[k], 0)
-  const base = Math.max(totals.income, out) || 1
+  const base = Math.max(totals.income + totals.withdrawal + carried, out) || 1
   return (
     <div className="mt-4 flex h-4 w-full gap-[3px] overflow-hidden rounded-full bg-ink/[.06]">
       {OUT_KINDS.map((k, i) =>
@@ -303,19 +309,117 @@ function FlowBar({ totals }: { totals: ReturnType<typeof monthTotals> }) {
   )
 }
 
-function Unallocated({ totals, currency }: { totals: ReturnType<typeof monthTotals>; currency: string }) {
-  // Money taken back out of savings is spendable again.
-  const left = totals.income + totals.withdrawal - OUT_KINDS.reduce((s, k) => s + totals[k], 0)
-  if (!totals.income && !left) return null
+function Unallocated({ totals, mm, currency }: { totals: ReturnType<typeof monthTotals>; mm: MonthMoney; currency: string }) {
+  // Carried-in money and money taken back out of savings are spendable; spending paid from elsewhere isn't counted here.
+  const left = mm.left
+  if (!totals.income && !left && !mm.carried) return null
   const over = left < 0
   return (
-    <div className="mt-4 flex items-center justify-between rounded-2xl px-3 py-2.5" style={{ background: over ? '#FFE6E3' : '#F6F1E8' }}>
+    <>
+      {mm.carried > 0 && (
+        <div className="num mt-4 flex items-center justify-between px-3 text-[13px] font-extrabold text-ink/50">
+          <span>🌾 Carried from {monthName(addMonths(mm.month, -1))}</span>
+          <span>+{money(mm.carried, currency)}</span>
+        </div>
+      )}
+      <div className={`${mm.carried > 0 ? 'mt-2' : 'mt-4'} flex items-center justify-between rounded-2xl px-3 py-2.5`} style={{ background: over ? '#FFE6E3' : '#F6F1E8' }}>
       <span className="text-[13px] font-extrabold" style={{ color: over ? '#D9443A' : 'rgba(38,35,46,.6)' }}>
         {over ? 'More out than in this month' : 'Still unassigned'}
       </span>
       <span className="num text-[15px] font-black" style={{ color: over ? '#D9443A' : 'var(--color-ink)' }}>
         {money(Math.abs(left), currency)}
       </span>
+      </div>
+    </>
+  )
+}
+
+/**
+ * The one number that matters day to day: what can go out today and still leave the
+ * saving promise and the bills still to come this month untouched.
+ */
+function TodayCard({ onSpendTreat }: { onSpendTreat: () => void }) {
+  const { entries, settings, recurring, money: mm, treat } = useStore()
+  const [open, setOpen] = useState(false)
+  const cur = settings.currency
+  const plan = settings.savingsPlan
+  const promise = plan ? Math.max(0, plan.amount - (promiseMonths(entries, plan).at(-1)?.saved ?? 0)) : 0
+  const upcoming = useMemo(() => upcomingThisMonth(recurring), [recurring])
+  const s = safeToSpend(mm.left, promise, upcoming.reduce((n, u) => n + u.r.amount, 0))
+  const blank = mm.left === 0 && !entries.some((e) => monthKey(e.date) === mm.month)
+  const sub =
+    s.free > 0
+      ? `${money(s.free, cur)} spare for the next ${s.days} day${s.days === 1 ? '' : 's'}`
+      : mm.left < 0
+        ? `This month is ${money(-mm.left, cur)} over`
+        : mm.left > 0
+          ? 'Everything left is already spoken for'
+          : 'Log money in to see your daily number'
+
+  return (
+    <Card>
+      <button onClick={() => !blank && setOpen((o) => !o)} className="flex w-full flex-col text-left" aria-expanded={open}>
+        <span className="flex items-center justify-between">
+          <span className="text-[13px] font-extrabold tracking-wider text-ink/50 uppercase">Safe to spend today</span>
+          {!blank && (
+            <motion.span animate={{ rotate: open ? 180 : 0 }} className="text-ink/35">
+              <ChevronDown size={20} strokeWidth={3} />
+            </motion.span>
+          )}
+        </span>
+        <CountUp
+          value={s.perDay}
+          currency={cur}
+          className="mt-0.5 block text-[40px] leading-tight font-black"
+          style={{ color: s.free > 0 ? 'var(--color-ink)' : 'rgba(38,35,46,.3)' }}
+        />
+        <span className="num text-[13px] font-bold" style={{ color: mm.left < 0 ? '#D9443A' : 'rgba(38,35,46,.5)' }}>
+          {sub}
+        </span>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+            <div className="num mt-3 flex flex-col gap-1.5 rounded-2xl bg-cream p-3 text-[13px] font-bold text-ink/60">
+              <Line label="Left this month" value={money(mm.left, cur)} />
+              {mm.carried > 0 && <Line label={`incl. ${monthName(addMonths(mm.month, -1))}'s leftover`} value={money(mm.carried, cur)} quiet />}
+              {promise > 0 && <Line label="🐷 Saving promise still to go" value={`−${money(promise, cur)}`} />}
+              {upcoming.map((u) => (
+                <Line
+                  key={u.r.id + u.date}
+                  label={`🔁 ${u.r.category} · ${parseDay(u.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`}
+                  value={`−${money(u.r.amount, cur)}`}
+                />
+              ))}
+              <div className="my-0.5 h-px bg-ink/10" />
+              <Line label={`Spare ÷ ${s.days} day${s.days === 1 ? '' : 's'}`} value={`${money(s.perDay, cur)} a day`} strong />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {treat > 0 && (
+        <div className="mt-3 flex items-center gap-3 rounded-2xl bg-[#FFE6F1] p-3">
+          <span className="text-[28px]">🍦</span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-[13px] font-extrabold text-[#C2357A]">Treat money · guilt-free</span>
+            <span className="num truncate text-[19px] leading-tight font-black">{money(treat, cur)}</span>
+          </span>
+          <button onClick={onSpendTreat} className="h-10 shrink-0 rounded-xl bg-[#FF5FA2] px-3.5 text-[14px] font-extrabold text-white shadow-[0_3px_0_#C2357A]">
+            Spend
+          </button>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function Line({ label, value, quiet, strong }: { label: string; value: string; quiet?: boolean; strong?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between gap-3 ${quiet ? 'pl-3 text-ink/40' : ''} ${strong ? 'text-[14px] font-black text-ink' : ''}`}>
+      <span className="truncate">{label}</span>
+      <span className="shrink-0">{value}</span>
     </div>
   )
 }

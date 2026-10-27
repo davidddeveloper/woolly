@@ -5,6 +5,7 @@ import type { Entry } from '../db/repo'
 import { BUCKETS, categoryEmoji, type GoalCategory } from '../lib/buckets'
 import { money } from '../lib/format'
 import { noteSummary } from '../lib/notes'
+import { SOURCES } from '../lib/month'
 import { spring } from './ui'
 
 export type Tab = 'home' | 'activity' | 'insights' | 'barn'
@@ -52,7 +53,7 @@ export function BottomNav({ tab, onTab, onAdd, pulse }: { tab: Tab; onTab: (t: T
     )
   }
   return (
-    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto max-w-[480px] px-3" style={{ paddingBottom: 'calc(var(--safe-bottom) + 10px)' }}>
+    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto max-w-[480px] px-3" style={{ paddingBottom: 'var(--nav-gap)' }}>
       <div className="pointer-events-auto relative flex items-center px-1">
         {/* The frosted glass is its own empty layer. WebKit can paint animated children of a
             backdrop-filter element black (the + button pokes out above the bar), so nothing
@@ -126,7 +127,14 @@ export function EntryRow({
         <span className="truncate text-[15px] font-extrabold">{note.title || e.category}</span>
         <span className="truncate text-[13px] font-bold text-ink/50">
           {note.detail ? `${note.detail} · ` : note.title ? `${e.category} · ` : ''}
-          <span style={{ color: b.deep }}>{b.label}</span>
+          {/* Money from somewhere other than this month says where, in place of the bucket. */}
+          {e.source && e.source !== 'month' ? (
+            <span style={{ color: b.deep }}>
+              {SOURCES[e.source].emoji} {SOURCES[e.source].short}
+            </span>
+          ) : (
+            <span style={{ color: b.deep }}>{b.label}</span>
+          )}
         </span>
       </span>
       <span className="num shrink-0 text-[17px] font-black" style={{ color: e.kind === 'expense' ? 'var(--color-ink)' : b.deep }}>

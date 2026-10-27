@@ -82,6 +82,17 @@ const MIGRATIONS: string[] = [
   ALTER TABLE entries_next RENAME TO entries;
   CREATE INDEX idx_entries_date ON entries (date);
   `,
+  // Where the money for an entry came from, and how each month's leftover was wrapped up.
+  `
+  ALTER TABLE entries ADD COLUMN source TEXT NOT NULL DEFAULT 'month';  -- month | had | savings | treat
+  CREATE TABLE month_closes (
+    month       TEXT PRIMARY KEY,                       -- YYYY-MM
+    leftover    INTEGER NOT NULL,                       -- what was spare when it was wrapped up
+    saved       INTEGER NOT NULL DEFAULT 0,
+    treat       INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL
+  );
+  `,
 ]
 
 let db: Database | null = null
